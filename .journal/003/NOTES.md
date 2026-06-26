@@ -26,3 +26,8 @@ Validation: `go test ./...` passed, and `moon run root:check --summary minimal` 
 ## 2026-06-26 15:31 — PR opened and CI verified
 Pushed `feat/oidc-provider-spike` to origin and opened PR #9: https://github.com/meigma/go-oidc-mock/pull/9.
 CI result: `ci`, `GitHub Pages`, and `Kusari Inspector` completed successfully; release/image dry-run jobs and deploy were skipped by workflow rules. GitHub reports the PR merge state as clean.
+
+## 2026-06-26 15:37 — Close
+Merged PR #9 with a squash merge at `164cfb7ff31cddc8d24cfe6b2a62dd30cf4ddbbf`: https://github.com/meigma/go-oidc-mock/pull/9.
+Local `master` is fast-forwarded to the merge commit. The `feat/oidc-provider-spike` Worktrunk worktree and local branch were removed, and the stale remote feature branch was deleted.
+Handoff: phase 1 is complete; phase 2 starts from provider-backed discovery/JWKS plus explicit Huma 501 placeholders for authorize, token, and userinfo.
