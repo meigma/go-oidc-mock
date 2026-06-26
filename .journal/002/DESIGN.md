@@ -36,12 +36,61 @@ Likely first integration shape:
 3. Configure endpoints to preserve the current public shape:
    `/.well-known/openid-configuration`, `/jwks.json`, `/oauth2/authorize`,
    `/oauth2/token`, and `/userinfo`.
-4. Start with static clients, static users, generated or configured RSA signing
-   key, authorization code flow, refresh tokens, PKCE S256, and `client_secret`
-   auth plus public-client support.
-5. Implement a mock auth policy that auto-selects a configured default user for
-   the first prototype. Add UI or test-control endpoints only after the protocol
-   flow works end to end.
+4. Start with static clients, configured user profiles, generated or configured
+   RSA signing key, authorization code flow, refresh tokens, PKCE S256, and
+   `client_secret` auth plus public-client support.
+5. Implement a mock auth policy whose authorization/consent page lets testers
+   select a profile and edit the effective user/claims just-in-time. Keep the
+   first version small: prove the JIT user snapshot can flow into ID tokens and
+   userinfo before adding richer UI.
+
+## JIT Users And Profiles
+
+Preferred user model: treat the OAuth authorization/consent page as the place
+where developers and testers create the effective user for the current login.
+
+This should reduce test setup friction. Testers should not need to restart the
+mock server or edit fixture files for every identity edge case. Profiles remain
+useful, but they are templates for fast selection rather than the only way to
+define users.
+
+First-pass behavior:
+
+1. The consent page shows a profile selector plus editable user fields.
+2. Selecting a profile populates defaults such as `sub`, `name`, `email`,
+   `email_verified`, groups/roles, and custom claims.
+3. The tester can edit the selected values before approving the authorization
+   request.
+4. Approval writes a snapshot of the effective user and claim data onto the
+   authorization grant.
+5. ID token and userinfo callbacks read from that grant snapshot, not from the
+   mutable profile definition.
+
+Why snapshot at grant time:
+
+- Refresh token flows should continue to return claims for the user that was
+  approved originally.
+- Userinfo should match the access token's authorization context.
+- Editing profiles later should not retroactively mutate already-issued grants.
+- The mock stays flexible without making global fixture state surprising.
+
+Likely data shape:
+
+- Profiles: named templates loaded from config, later editable through a control
+  API if that becomes useful.
+- JIT user snapshot: grant-local subject plus standard claims and arbitrary
+  custom claims.
+- Claim editor: initially a few structured fields plus a raw JSON object for
+  custom claims. Avoid over-designing a full identity-management UI.
+
+Open questions:
+
+- Whether the first page should combine login and consent or keep them as two
+  steps. For a mock, a combined page is probably enough.
+- How much validation to apply to custom claim JSON beyond syntactic JSON and
+  reserved-claim protection.
+- Whether a tester can save the edited JIT user back as a named profile. This is
+  useful, but should follow after the basic JIT flow works.
 
 Open questions for the spike:
 
@@ -53,7 +102,7 @@ Open questions for the spike:
 - Confirm endpoint override behavior for `/oauth2/authorize`, `/oauth2/token`,
   and `/jwks.json` against a running prototype.
 - Confirm whether `go-oidc` can issue exactly the claim shapes we want from a
-  compact fixture model without custom managers.
+  grant-local JIT user snapshot without custom managers.
 
 ## Other Candidates Checked
 
