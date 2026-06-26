@@ -16,3 +16,7 @@ Captured the comparison in `.journal/002/DESIGN.md`: ZITADEL `oidc` is the fallb
 ## 2026-06-26 13:37 — JIT user model
 Captured the user's preferred user model: the OAuth authorization/consent page should let testers select a profile and edit the effective user/claims just-in-time, rather than requiring a mock restart or fixture refresh for each identity edge case.
 Updated `.journal/002/DESIGN.md` to treat profiles as templates and to snapshot the approved user/claim data onto the grant so ID token, userinfo, and refresh-token behavior remain stable for already-issued authorizations.
+
+## 2026-06-26 13:42 — Docker Compose profile templates
+Captured the runtime assumption that `go-oidc-mock` will primarily run under Docker Compose. Profile templates should be JSON data files mounted into a well-known container directory, while ordinary service settings stay on flags/env vars.
+Updated `.journal/002/DESIGN.md` to keep template loading simple: startup-load mounted `*.json` profile files first, prove the path and schema with a spike, and defer hot reload or save-as-profile behavior until the JIT flow works.

@@ -36,9 +36,9 @@ Likely first integration shape:
 3. Configure endpoints to preserve the current public shape:
    `/.well-known/openid-configuration`, `/jwks.json`, `/oauth2/authorize`,
    `/oauth2/token`, and `/userinfo`.
-4. Start with static clients, configured user profiles, generated or configured
-   RSA signing key, authorization code flow, refresh tokens, PKCE S256, and
-   `client_secret` auth plus public-client support.
+4. Start with static clients, mounted JSON user profiles/templates, generated or
+   configured RSA signing key, authorization code flow, refresh tokens, PKCE
+   S256, and `client_secret` auth plus public-client support.
 5. Implement a mock auth policy whose authorization/consent page lets testers
    select a profile and edit the effective user/claims just-in-time. Keep the
    first version small: prove the JIT user snapshot can flow into ID tokens and
@@ -76,12 +76,27 @@ Why snapshot at grant time:
 
 Likely data shape:
 
-- Profiles: named templates loaded from config, later editable through a control
-  API if that becomes useful.
+- Profiles: named JSON templates loaded from a mounted runtime directory, later
+  editable through a control API if that becomes useful.
 - JIT user snapshot: grant-local subject plus standard claims and arbitrary
   custom claims.
 - Claim editor: initially a few structured fields plus a raw JSON object for
   custom claims. Avoid over-designing a full identity-management UI.
+
+Runtime loading model:
+
+- Expect the service to be run mostly through Docker Compose.
+- Treat user profiles/templates as data files, not env-var payloads. Compose can
+  mount JSON files into a well-known directory inside the container.
+- Keep ordinary operational settings on flags/env vars: issuer URL, bind
+  address, metrics address, logging, timeouts, token lifetimes, and the profile
+  template directory if the default needs to move.
+- Do not require a service rebuild for profile/template changes. The first pass
+  can load templates at startup; hot reload can come later if real use shows it
+  matters.
+- Use a conservative default such as one directory containing `*.json` profile
+  files. Exact path and schema should be proven in the spike rather than
+  specified in detail now.
 
 Open questions:
 
@@ -91,6 +106,9 @@ Open questions:
   reserved-claim protection.
 - Whether a tester can save the edited JIT user back as a named profile. This is
   useful, but should follow after the basic JIT flow works.
+- Whether mounted profile JSON should be one file containing all profiles or a
+  directory of one-profile-per-file. A directory is likely more Compose-friendly,
+  but the spike should verify ergonomics.
 
 Open questions for the spike:
 
@@ -103,6 +121,8 @@ Open questions for the spike:
   and `/jwks.json` against a running prototype.
 - Confirm whether `go-oidc` can issue exactly the claim shapes we want from a
   grant-local JIT user snapshot without custom managers.
+- Confirm the Docker Compose path and profile-loading behavior with a tiny
+  mounted JSON profile before expanding the schema.
 
 ## Other Candidates Checked
 
