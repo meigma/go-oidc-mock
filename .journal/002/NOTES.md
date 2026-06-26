@@ -24,3 +24,7 @@ Updated `.journal/002/DESIGN.md` to keep template loading simple: startup-load m
 ## 2026-06-26 13:47 — Resolved open questions
 Resolved the open design questions with the user's agreement: combine login and consent; use light JSON plus reserved-claim validation; defer save-as-profile; use one profile per JSON file; mount protocol handlers on exact chi paths; drop OpenAPI; preserve current OIDC endpoint paths; try grant-local JIT snapshots before custom managers; and default profile loading to a Compose-mounted directory with a flag/env override.
 Updated `.journal/002/DESIGN.md` to replace the open-question lists with resolved decisions and a short set of remaining spike checks.
+
+## 2026-06-26 13:49 — Formal design draft
+Transformed `.journal/002/DESIGN.md` from rough notes into a structured engineering design document. The new shape covers status, summary, current state, goals, non-goals, design principles, proposed architecture, HTTP surface, protocol library choice, JIT user/profile model, runtime configuration, implementation slices, acceptance criteria, alternatives, risks, and deferred work.
+Kept the profile JSON schema illustrative rather than final so the next spike can prove the shape without locking in unnecessary detail.
