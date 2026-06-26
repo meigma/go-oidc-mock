@@ -1,7 +1,6 @@
 package httpapi_test
 
 import (
-	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -19,7 +18,7 @@ import (
 	"github.com/meigma/go-oidc-mock/internal/oidc/httpapi"
 )
 
-func TestEndpointsServeProtocolShell(t *testing.T) {
+func TestFlowPlaceholdersRemainNotImplemented(t *testing.T) {
 	t.Parallel()
 
 	service, err := oidc.NewService("https://issuer.example.test")
@@ -38,13 +37,6 @@ func TestEndpointsServeProtocolShell(t *testing.T) {
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
-	metadata := getJSON[oidc.ProviderMetadata](t, srv, oidc.DiscoveryPath, http.StatusOK)
-	assert.Equal(t, "https://issuer.example.test", metadata.Issuer)
-	assert.Equal(t, "https://issuer.example.test/oauth2/authorize", metadata.AuthorizationEndpoint)
-
-	jwks := getJSON[oidc.JWKS](t, srv, oidc.JWKSPath, http.StatusOK)
-	assert.Empty(t, jwks.Keys)
-
 	for _, path := range []string{oidc.AuthorizationPath, oidc.UserInfoPath} {
 		resp := get(t, srv, path)
 		assert.Equal(t, http.StatusNotImplemented, resp.StatusCode)
@@ -55,20 +47,6 @@ func TestEndpointsServeProtocolShell(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusNotImplemented, resp.StatusCode)
 	require.NoError(t, resp.Body.Close())
-}
-
-func getJSON[T any](t *testing.T, srv *httptest.Server, path string, wantStatus int) T {
-	t.Helper()
-
-	resp := get(t, srv, path)
-	defer resp.Body.Close()
-
-	require.Equal(t, wantStatus, resp.StatusCode)
-
-	var out T
-	require.NoError(t, json.NewDecoder(resp.Body).Decode(&out))
-
-	return out
 }
 
 func get(t *testing.T, srv *httptest.Server, path string) *http.Response {

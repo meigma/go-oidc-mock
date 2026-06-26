@@ -56,7 +56,7 @@ func New(
 	}
 
 	metrics := observability.NewMetrics()
-	rateLimiter, installRateLimit := buildRateLimiter(cfg, logger)
+	rateLimiter, installRateLimit, limitRawRoute := buildRateLimiter(cfg, logger)
 
 	// Configure tracing before serving so the global provider is in place when
 	// requests start producing spans.
@@ -82,6 +82,7 @@ func New(
 		TrustedProxyHeader:   cfg.TrustedProxyHeader,
 		Readiness:            nil,
 		Register:             registerResources(service),
+		RawRoutes:            protocolRoutes(service.Handler(), limitRawRoute),
 		Tracing:              cfg.TracingEnabled,
 		InstallRateLimit:     installRateLimit,
 	})
@@ -117,20 +118,24 @@ func New(
 	}, nil
 }
 
-// buildRateLimiter constructs the rate limiter and the hook that installs the
-// rate-limit middleware on the API. When rate limiting is disabled it returns a
-// nil limiter and a nil hook, so NewRouter leaves the API unthrottled.
-func buildRateLimiter(cfg config.Config, logger *slog.Logger) (*ratelimit.InMemory, func(huma.API)) {
+// buildRateLimiter constructs the rate limiter and hooks that install it on
+// both Huma operations and raw application routes. When rate limiting is
+// disabled it returns nil hooks, so NewRouter leaves the API unthrottled.
+func buildRateLimiter(
+	cfg config.Config,
+	logger *slog.Logger,
+) (*ratelimit.InMemory, func(huma.API), func(http.Handler) http.Handler) {
 	if !cfg.RateLimitEnabled {
-		return nil, nil
+		return nil, nil, nil
 	}
 
 	limiter := ratelimit.NewInMemory(rate.Limit(cfg.RateLimitRPS), cfg.RateLimitBurst, rateLimiterIdleTTL)
 	install := func(api huma.API) {
 		ratelimit.NewMiddleware(api, limiter, adapterhttp.ClientIPKeyFunc, logger, true).Install()
 	}
+	limitRawRoute := adapterhttp.RateLimitHandler(limiter, adapterhttp.ClientIPRequestKeyFunc, logger, true)
 
-	return limiter, install
+	return limiter, install, limitRawRoute
 }
 
 // Handler returns the assembled HTTP handler, primarily for functional tests.
@@ -157,5 +162,19 @@ func OpenAPIYAML(version string) ([]byte, error) {
 func registerResources(service *oidc.Service) adapterhttp.Registrar {
 	return func(api huma.API) {
 		httpapi.Register(api, service)
+	}
+}
+
+func protocolRoutes(
+	providerHandler http.Handler,
+	limitRawRoute func(http.Handler) http.Handler,
+) []adapterhttp.RawRoute {
+	if limitRawRoute != nil {
+		providerHandler = limitRawRoute(providerHandler)
+	}
+
+	return []adapterhttp.RawRoute{
+		{Method: http.MethodGet, Path: oidc.DiscoveryPath, Handler: providerHandler},
+		{Method: http.MethodGet, Path: oidc.JWKSPath, Handler: providerHandler},
 	}
 }

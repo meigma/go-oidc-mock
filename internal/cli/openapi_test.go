@@ -25,7 +25,8 @@ func TestOpenAPICommandWritesFile(t *testing.T) {
 
 	content := string(data)
 	assert.Contains(t, content, "openapi: 3.0")
-	assert.Contains(t, content, "/.well-known/openid-configuration")
+	assert.Contains(t, content, "/oauth2/authorize")
+	assert.NotContains(t, content, "/.well-known/openid-configuration")
 	assert.Contains(t, content, "1.2.3")
 }
 

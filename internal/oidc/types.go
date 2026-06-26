@@ -36,5 +36,5 @@ type JWKS struct {
 	Keys []JWK `json:"keys"`
 }
 
-// JWK is a placeholder JSON Web Key shape for the first-pass empty JWKS.
+// JWK is a loose JSON Web Key shape used when decoding provider-owned keys.
 type JWK map[string]any

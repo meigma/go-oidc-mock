@@ -48,6 +48,9 @@ type RouterDeps struct {
 	Readiness []ReadinessCheck
 	// Register mounts resource operations onto the Huma API.
 	Register Registrar
+	// RawRoutes mounts exact non-Huma routes that still belong to the application
+	// surface, such as protocol-library endpoints.
+	RawRoutes []RawRoute
 	// Tracing wraps the handler with the OpenTelemetry HTTP server-span
 	// instrumentation (otelhttp) and installs the span-naming Huma middleware.
 	// The infrastructure routes (/healthz, /readyz, /metrics) are filtered out so
@@ -63,9 +66,10 @@ type RouterDeps struct {
 }
 
 // NewRouter assembles the chi router: the core middleware stack, RFC 9457 error
-// fallbacks, the Huma API with its registered resource operations (which appear
-// in the OpenAPI spec), and the raw infrastructure routes (/healthz, /readyz,
-// and — when ServeMetricsEndpoint is set — /metrics) that bypass the spec.
+// fallbacks, raw application routes, the Huma API with its registered resource
+// operations (which appear in the OpenAPI spec), and the raw infrastructure
+// routes (/healthz, /readyz, and — when ServeMetricsEndpoint is set — /metrics)
+// that bypass the spec.
 func NewRouter(deps RouterDeps) http.Handler {
 	mux := chi.NewMux()
 
@@ -116,6 +120,13 @@ func NewRouter(deps RouterDeps) http.Handler {
 	// Resource operations are mounted by their adapter packages via the Registrar.
 	if deps.Register != nil {
 		deps.Register(api)
+	}
+
+	for _, route := range deps.RawRoutes {
+		if route.Handler == nil {
+			continue
+		}
+		mux.Method(route.Method, route.Path, route.Handler)
 	}
 
 	// Infrastructure routes stay raw chi and are excluded from the spec.

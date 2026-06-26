@@ -46,7 +46,18 @@ func TestAppWiring(t *testing.T) {
 	var metadata oidc.ProviderMetadata
 	require.NoError(t, json.Unmarshal(discoveryRec.Body.Bytes(), &metadata))
 	assert.Equal(t, "https://issuer.example.test", metadata.Issuer)
+	assert.Equal(t, "https://issuer.example.test/oauth2/authorize", metadata.AuthorizationEndpoint)
 	assert.Equal(t, "https://issuer.example.test/oauth2/token", metadata.TokenEndpoint)
+	assert.Equal(t, "https://issuer.example.test/jwks.json", metadata.JWKSURI)
+
+	jwksReq := httptest.NewRequest(http.MethodGet, oidc.JWKSPath, nil)
+	jwksRec := httptest.NewRecorder()
+	handler.ServeHTTP(jwksRec, jwksReq)
+	require.Equal(t, http.StatusOK, jwksRec.Code)
+
+	var jwks oidc.JWKS
+	require.NoError(t, json.Unmarshal(jwksRec.Body.Bytes(), &jwks))
+	assert.Len(t, jwks.Keys, 1)
 }
 
 func TestAppWiringRateLimits(t *testing.T) {

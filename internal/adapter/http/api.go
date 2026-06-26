@@ -7,6 +7,7 @@ package http
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
@@ -19,6 +20,16 @@ const apiTitle = "go-oidc-mock"
 // Registrar mounts resource operations onto a Huma API. Each resource's HTTP
 // adapter package provides one, and the composition root composes them.
 type Registrar func(huma.API)
+
+// RawRoute mounts a non-Huma HTTP handler on an exact router path.
+type RawRoute struct {
+	// Method is the HTTP method accepted by the route.
+	Method string
+	// Path is the exact route path.
+	Path string
+	// Handler serves the route.
+	Handler http.Handler
+}
 
 // NewAPI wraps mux with Huma and returns the API. It registers no operations;
 // callers register resource handlers onto the returned API via a Registrar.

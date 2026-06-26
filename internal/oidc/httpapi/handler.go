@@ -12,37 +12,11 @@ import (
 
 const tagOIDC = "OIDC"
 
-type handlers struct {
-	service *oidc.Service
-}
+type handlers struct{}
 
-type metadataOutput struct {
-	Body oidc.ProviderMetadata
-}
-
-type jwksOutput struct {
-	Body oidc.JWKS
-}
-
-// Register mounts the OIDC/OAuth protocol endpoints on api.
-func Register(api huma.API, service *oidc.Service) {
-	h := &handlers{service: service}
-
-	huma.Register(api, huma.Operation{
-		OperationID: "openid-configuration",
-		Method:      http.MethodGet,
-		Path:        oidc.DiscoveryPath,
-		Summary:     "Get OpenID provider configuration",
-		Tags:        []string{tagOIDC},
-	}, h.discovery)
-
-	huma.Register(api, huma.Operation{
-		OperationID: "jwks",
-		Method:      http.MethodGet,
-		Path:        oidc.JWKSPath,
-		Summary:     "Get JSON Web Key Set",
-		Tags:        []string{tagOIDC},
-	}, h.jwks)
+// Register mounts the phase-2 OIDC/OAuth flow placeholders on api.
+func Register(api huma.API, _ *oidc.Service) {
+	h := &handlers{}
 
 	huma.Register(api, huma.Operation{
 		OperationID: "authorize",
@@ -70,14 +44,6 @@ func Register(api huma.API, service *oidc.Service) {
 		Tags:        []string{tagOIDC},
 		Errors:      []int{http.StatusNotImplemented},
 	}, h.notImplemented)
-}
-
-func (h *handlers) discovery(_ context.Context, _ *struct{}) (*metadataOutput, error) {
-	return &metadataOutput{Body: h.service.ProviderMetadata()}, nil
-}
-
-func (h *handlers) jwks(_ context.Context, _ *struct{}) (*jwksOutput, error) {
-	return &jwksOutput{Body: h.service.JWKS()}, nil
 }
 
 func (h *handlers) notImplemented(_ context.Context, _ *struct{}) (*struct{}, error) {
