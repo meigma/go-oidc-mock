@@ -22,3 +22,7 @@ Branch scope: embed `github.com/luikyv/go-oidc@v0.23.0` for discovery and non-em
 Implemented the phase 1 provider spike on `feat/oidc-provider-spike` and committed it as `31968cc feat(oidc): embed provider for discovery and jwks`.
 Outcome: discovery and JWKS are served by `github.com/luikyv/go-oidc@v0.23.0` on the existing paths with an ephemeral in-memory RSA signing key; authorize/token/userinfo remain Huma `501` placeholders; raw provider routes are mounted exactly and receive the same rate-limit decision path as Huma operations while infrastructure routes still bypass rate limiting.
 Validation: `go test ./...` passed, and `moon run root:check --summary minimal` passed. The docs build emitted the existing Material/MkDocs 2.0 warning but completed successfully.
+
+## 2026-06-26 15:31 — PR opened and CI verified
+Pushed `feat/oidc-provider-spike` to origin and opened PR #9: https://github.com/meigma/go-oidc-mock/pull/9.
+CI result: `ci`, `GitHub Pages`, and `Kusari Inspector` completed successfully; release/image dry-run jobs and deploy were skipped by workflow rules. GitHub reports the PR merge state as clean.
