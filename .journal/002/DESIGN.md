@@ -98,31 +98,40 @@ Runtime loading model:
   files. Exact path and schema should be proven in the spike rather than
   specified in detail now.
 
-Open questions:
+## Resolved Design Decisions
 
-- Whether the first page should combine login and consent or keep them as two
-  steps. For a mock, a combined page is probably enough.
-- How much validation to apply to custom claim JSON beyond syntactic JSON and
-  reserved-claim protection.
-- Whether a tester can save the edited JIT user back as a named profile. This is
-  useful, but should follow after the basic JIT flow works.
-- Whether mounted profile JSON should be one file containing all profiles or a
-  directory of one-profile-per-file. A directory is likely more Compose-friendly,
-  but the spike should verify ergonomics.
+- Combine login and consent into one authorization page for v1. The page should
+  show requested client/scope context, profile selection, editable effective
+  user fields, custom claims JSON, and approve/deny controls.
+- Validate custom claims lightly: require syntactically valid JSON objects and
+  protect protocol-owned/reserved claims from being overridden by user-provided
+  custom claim data.
+- Defer saving edited JIT users back as named profiles. It is useful future
+  functionality, but not needed for v1.
+- Use one profile per JSON file in the mounted profile directory.
+- Mount the `go-oidc` protocol handler through the existing chi router on exact
+  protocol paths so health, readiness, metrics, and router fallbacks remain
+  owned by the existing service infrastructure.
+- Drop OpenAPI as a project goal for the protocol service. The library-owned
+  standard OIDC/OAuth endpoints plus discovery metadata are enough; ordinary
+  startup configuration should happen through flags/env vars, not admin APIs.
+- Preserve the existing public endpoint paths:
+  `/.well-known/openid-configuration`, `/jwks.json`, `/oauth2/authorize`,
+  `/oauth2/token`, and `/userinfo`.
+- Use `go-oidc`'s normal grant flow first: store the JIT user snapshot in the
+  grant path and read it from ID token/userinfo callbacks. Avoid custom managers
+  unless the spike proves they are necessary.
+- Default profile loading to a Docker Compose-friendly mounted directory, likely
+  `/etc/go-oidc-mock/profiles/*.json`, with a flag/env var override such as
+  `--profile-dir` / `GO_OIDC_MOCK_PROFILE_DIR`.
 
-Open questions for the spike:
+Remaining spike checks:
 
-- Verify the `go-oidc` handler can be mounted cleanly under the existing chi
-  router without interfering with health, readiness, metrics, or RFC 9457
-  fallbacks.
-- Decide whether protocol OpenAPI remains Huma-generated, becomes static docs,
-  or is omitted for the library-owned protocol endpoints.
-- Confirm endpoint override behavior for `/oauth2/authorize`, `/oauth2/token`,
-  and `/jwks.json` against a running prototype.
-- Confirm whether `go-oidc` can issue exactly the claim shapes we want from a
-  grant-local JIT user snapshot without custom managers.
-- Confirm the Docker Compose path and profile-loading behavior with a tiny
-  mounted JSON profile before expanding the schema.
+- Prove endpoint override and exact-path mounting with a tiny running prototype.
+- Prove a mounted one-profile JSON file can populate the combined authorization
+  page.
+- Prove the approved JIT user snapshot survives into ID token, userinfo, and
+  refresh-token behavior without custom managers.
 
 ## Other Candidates Checked
 

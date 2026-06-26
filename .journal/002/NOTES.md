@@ -20,3 +20,7 @@ Updated `.journal/002/DESIGN.md` to treat profiles as templates and to snapshot 
 ## 2026-06-26 13:42 — Docker Compose profile templates
 Captured the runtime assumption that `go-oidc-mock` will primarily run under Docker Compose. Profile templates should be JSON data files mounted into a well-known container directory, while ordinary service settings stay on flags/env vars.
 Updated `.journal/002/DESIGN.md` to keep template loading simple: startup-load mounted `*.json` profile files first, prove the path and schema with a spike, and defer hot reload or save-as-profile behavior until the JIT flow works.
+
+## 2026-06-26 13:47 — Resolved open questions
+Resolved the open design questions with the user's agreement: combine login and consent; use light JSON plus reserved-claim validation; defer save-as-profile; use one profile per JSON file; mount protocol handlers on exact chi paths; drop OpenAPI; preserve current OIDC endpoint paths; try grant-local JIT snapshots before custom managers; and default profile loading to a Compose-mounted directory with a flag/env override.
+Updated `.journal/002/DESIGN.md` to replace the open-question lists with resolved decisions and a short set of remaining spike checks.
