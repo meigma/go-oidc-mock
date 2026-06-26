@@ -148,7 +148,7 @@ jobs:
         run: gh release upload "$RELEASE_TAG" dist/release-assets/* --clobber
 
       - name: Attest release checksums
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-checksums: dist/release-assets/checksums.txt
 
@@ -379,7 +379,7 @@ jobs:
           docker run --rm "${{ steps.manifest.outputs.tag }}" openapi | grep -Fq "openapi: 3.0.3"
 
       - name: Attest container image
-        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        uses: actions/attest@a1948c3f048ba23858d222213b7c278aabede763 # v4.1.1
         with:
           subject-name: ${{ steps.manifest.outputs.name }}
           subject-digest: ${{ steps.manifest.outputs.digest }}
