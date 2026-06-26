@@ -14,3 +14,6 @@ Created implementation worktree `/Users/josh/code/meigma/go-oidc-mock/.wt/feat-r
 
 ## 2026-06-26 12:39 — Validation Checkpoint
 Committed implementation as `42c5387 feat: rebrand as OIDC mock server` on `feat/rebrand-oidc-mock`. Validation passed: `go test ./...`, `moon run root:openapi`, `moon run root:check --summary minimal`, `docker build .`, `docker compose config`, Python live-smoke of `/healthz`, `/readyz`, `/.well-known/openid-configuration`, `/jwks.json`, and `/oauth2/authorize` returning 501, plus `.github/scripts` unit tests. Cleanup scan found no stale template/todo/authz/database references and `git ls-files .journal` is empty on the implementation branch.
+
+## 2026-06-26 12:47 — Close
+Merged PR #8 (`https://github.com/meigma/go-oidc-mock/pull/8`) with squash commit `519d073 feat: rebrand as OIDC mock server`. Local `master` is fast-forwarded to the merge commit, the remote feature branch was deleted, and the local `feat/rebrand-oidc-mock` worktree and branch were removed. Session handoff: project identity and OIDC skeleton are landed; real login/token/userinfo flows remain future work.
