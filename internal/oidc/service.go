@@ -3,13 +3,22 @@
 package oidc
 
 import (
+	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/luikyv/go-oidc/pkg/goidc"
+	"github.com/luikyv/go-oidc/pkg/provider"
 )
 
 const (
+	signingKeyBits = 2048
+
 	// DiscoveryPath is the OpenID Provider Configuration endpoint path.
 	DiscoveryPath = "/.well-known/openid-configuration"
 	// JWKSPath is the JSON Web Key Set endpoint path.
@@ -22,9 +31,11 @@ const (
 	UserInfoPath = "/userinfo"
 )
 
-// Service provides deterministic OIDC provider metadata for the mock server.
+// Service owns the embedded OpenID Provider used by the mock server.
 type Service struct {
-	issuer string
+	issuer   string
+	provider *provider.Provider
+	jwks     goidc.JSONWebKeySet
 }
 
 // NewService constructs a Service for issuerURL.
@@ -34,41 +45,72 @@ func NewService(issuerURL string) (*Service, error) {
 		return nil, err
 	}
 
-	return &Service{issuer: issuer}, nil
-}
-
-// ProviderMetadata returns the mock provider's discovery document.
-func (s *Service) ProviderMetadata() ProviderMetadata {
-	return ProviderMetadata{
-		Issuer:                           s.issuer,
-		AuthorizationEndpoint:            s.endpoint(AuthorizationPath),
-		TokenEndpoint:                    s.endpoint(TokenPath),
-		JWKSURI:                          s.endpoint(JWKSPath),
-		UserInfoEndpoint:                 s.endpoint(UserInfoPath),
-		ScopesSupported:                  []string{"openid", "profile", "email", "offline_access"},
-		ResponseTypesSupported:           []string{"code"},
-		GrantTypesSupported:              []string{"authorization_code", "refresh_token"},
-		SubjectTypesSupported:            []string{"public"},
-		IDTokenSigningAlgValuesSupported: []string{"RS256"},
-		TokenEndpointAuthMethodsSupported: []string{
-			"client_secret_basic",
-			"client_secret_post",
-			"none",
-		},
-		ClaimsSupported: []string{"sub", "name", "email", "email_verified"},
-		CodeChallengeMethodsSupported: []string{
-			"S256",
-		},
+	jwks, err := newSigningJWKS()
+	if err != nil {
+		return nil, fmt.Errorf("generate signing jwks: %w", err)
 	}
+
+	op, err := provider.New(
+		issuer,
+		nil,
+		func(context.Context) (goidc.JSONWebKeySet, error) {
+			return jwks, nil
+		},
+		provider.WithJWKSEndpoint(JWKSPath),
+		provider.WithAuthorizeEndpoint(AuthorizationPath),
+		provider.WithTokenEndpoint(TokenPath),
+		provider.WithUserInfoEndpoint(UserInfoPath),
+		provider.WithScopes(goidc.ScopeProfile, goidc.ScopeEmail, goidc.ScopeOfflineAccess),
+		provider.WithClaims(goidc.ClaimSubject, goidc.ClaimName, goidc.ClaimEmail, goidc.ClaimEmailVerified),
+		provider.WithIDTokenSignatureAlgs(goidc.RS256),
+		provider.WithSecretBasicAuthn(),
+		provider.WithSecretPostAuthn(),
+		provider.WithJTIConsumer(func(context.Context, string) error {
+			return nil
+		}),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("init embedded oidc provider: %w", err)
+	}
+
+	return &Service{
+		issuer:   issuer,
+		provider: op,
+		jwks:     jwks,
+	}, nil
 }
 
-// JWKS returns the currently configured JSON Web Key Set.
-func (s *Service) JWKS() JWKS {
-	return JWKS{Keys: []JWK{}}
+// Issuer returns the normalized issuer URL for this mock provider.
+func (s *Service) Issuer() string {
+	return s.issuer
 }
 
-func (s *Service) endpoint(path string) string {
-	return s.issuer + path
+// Handler returns the embedded provider's HTTP handler.
+func (s *Service) Handler() http.Handler {
+	return s.provider.Handler()
+}
+
+// JWKS returns the public signing keys currently advertised by the provider.
+func (s *Service) JWKS() goidc.JSONWebKeySet {
+	return s.jwks.Public()
+}
+
+func newSigningJWKS() (goidc.JSONWebKeySet, error) {
+	key, err := rsa.GenerateKey(rand.Reader, signingKeyBits)
+	if err != nil {
+		return goidc.JSONWebKeySet{}, err
+	}
+
+	return goidc.JSONWebKeySet{
+		Keys: []goidc.JSONWebKey{
+			{
+				KeyID:     "go-oidc-mock-signing-key",
+				Key:       key,
+				Use:       "sig",
+				Algorithm: string(goidc.RS256),
+			},
+		},
+	}, nil
 }
 
 func normalizeIssuerURL(raw string) (string, error) {

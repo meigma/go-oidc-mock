@@ -1,6 +1,9 @@
 package oidc_test
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -9,30 +12,46 @@ import (
 	"github.com/meigma/go-oidc-mock/internal/oidc"
 )
 
-func TestProviderMetadataDerivesEndpointURLsFromIssuer(t *testing.T) {
+func TestServiceNormalizesIssuer(t *testing.T) {
 	t.Parallel()
 
 	service, err := oidc.NewService("https://issuer.example.test/tenant/")
 	require.NoError(t, err)
 
-	metadata := service.ProviderMetadata()
+	assert.Equal(t, "https://issuer.example.test/tenant", service.Issuer())
+}
 
+func TestJWKSStartsWithSigningKey(t *testing.T) {
+	t.Parallel()
+
+	service, err := oidc.NewService("http://localhost:8080")
+	require.NoError(t, err)
+
+	jwks := service.JWKS()
+	require.Len(t, jwks.Keys, 1)
+	assert.Equal(t, "go-oidc-mock-signing-key", jwks.Keys[0].KeyID)
+	assert.Equal(t, "RS256", jwks.Keys[0].Algorithm)
+}
+
+func TestProviderHandlerServesDiscoveryAndJWKS(t *testing.T) {
+	t.Parallel()
+
+	service, err := oidc.NewService("https://issuer.example.test/tenant/")
+	require.NoError(t, err)
+
+	srv := httptest.NewServer(service.Handler())
+	t.Cleanup(srv.Close)
+
+	metadata := getJSON[oidc.ProviderMetadata](t, srv, oidc.DiscoveryPath, http.StatusOK)
 	assert.Equal(t, "https://issuer.example.test/tenant", metadata.Issuer)
 	assert.Equal(t, "https://issuer.example.test/tenant/oauth2/authorize", metadata.AuthorizationEndpoint)
 	assert.Equal(t, "https://issuer.example.test/tenant/oauth2/token", metadata.TokenEndpoint)
 	assert.Equal(t, "https://issuer.example.test/tenant/jwks.json", metadata.JWKSURI)
 	assert.Equal(t, "https://issuer.example.test/tenant/userinfo", metadata.UserInfoEndpoint)
 	assert.Contains(t, metadata.ScopesSupported, "openid")
-	assert.Equal(t, []string{"code"}, metadata.ResponseTypesSupported)
-}
 
-func TestJWKSStartsEmpty(t *testing.T) {
-	t.Parallel()
-
-	service, err := oidc.NewService("http://localhost:8080")
-	require.NoError(t, err)
-
-	assert.Empty(t, service.JWKS().Keys)
+	jwks := getJSON[oidc.JWKS](t, srv, oidc.JWKSPath, http.StatusOK)
+	assert.Len(t, jwks.Keys, 1)
 }
 
 func TestNewServiceRejectsInvalidIssuerURL(t *testing.T) {
@@ -54,4 +73,19 @@ func TestNewServiceRejectsInvalidIssuerURL(t *testing.T) {
 			require.Error(t, err)
 		})
 	}
+}
+
+func getJSON[T any](t *testing.T, srv *httptest.Server, path string, wantStatus int) T {
+	t.Helper()
+
+	resp, err := srv.Client().Get(srv.URL + path)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	require.Equal(t, wantStatus, resp.StatusCode)
+
+	var out T
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&out))
+
+	return out
 }
