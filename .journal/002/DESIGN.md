@@ -6,6 +6,7 @@
 - Last updated: 2026-06-26
 - Location: local session journal
 - Scope: future implementation sessions for `go-oidc-mock`
+- Companion plan: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md)
 
 This document captures the current implementation direction. It is intentionally
 not a full architecture manual. The next useful step is a small working spike

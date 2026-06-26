@@ -28,3 +28,7 @@ Updated `.journal/002/DESIGN.md` to replace the open-question lists with resolve
 ## 2026-06-26 13:49 — Formal design draft
 Transformed `.journal/002/DESIGN.md` from rough notes into a structured engineering design document. The new shape covers status, summary, current state, goals, non-goals, design principles, proposed architecture, HTTP surface, protocol library choice, JIT user/profile model, runtime configuration, implementation slices, acceptance criteria, alternatives, risks, and deferred work.
 Kept the profile JSON schema illustrative rather than final so the next spike can prove the shape without locking in unnecessary detail.
+
+## 2026-06-26 13:56 — Phased implementation plan
+Added `.journal/002/IMPLEMENTATION_PLAN.md` as a lightweight companion to the design document. The plan sequences future work through protocol-library spike, minimal auth-code flow, mounted profiles, combined authorization page, grant-local snapshots, refresh behavior, Compose/operator polish, and a consolidation checkpoint.
+Kept each phase focused on a brief outcome and success criteria so implementation details can be decided from working code rather than over-specified upfront.
