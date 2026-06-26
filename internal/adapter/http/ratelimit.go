@@ -13,7 +13,6 @@ import (
 //
 // It has the signature of ratelimit.KeyFunc and is the default key for the
 // rate-limit middleware. To limit authenticated callers instead, swap in a key
-// function that reads the principal (see internal/authz) from the context;
 // keying lives here, in the transport, so the limiter core stays
 // router-agnostic. It never errors: an unresolved IP yields the empty key, which
 // simply shares one bucket rather than failing the request.

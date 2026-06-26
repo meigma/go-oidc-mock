@@ -1,15 +1,15 @@
 version: 2
 
-project_name: template-go-api
+project_name: go-oidc-mock
 
 before:
   hooks:
     - go test ./...
 
 builds:
-  - id: template-go-api
-    main: ./cmd/template-go-api
-    binary: template-go-api
+  - id: go-oidc-mock
+    main: ./cmd/go-oidc-mock
+    binary: go-oidc-mock
     env:
       - CGO_ENABLED=0
     goos:
@@ -28,9 +28,9 @@ builds:
     mod_timestamp: '{{ .CommitTimestamp }}'
 
 archives:
-  - id: template-go-api
+  - id: go-oidc-mock
     ids:
-      - template-go-api
+      - go-oidc-mock
     formats:
       - binary
     name_template: >-

@@ -79,7 +79,8 @@ func NewTracerProvider(ctx context.Context, cfg TracingConfig) (func(context.Con
 // TraceSpanNamer is router-agnostic Huma middleware that renames the active
 // server span (created by otelhttp at the edge) to the matched operation's ID
 // and tags it with the route template, giving low-cardinality, meaningful span
-// names like "get-todo" instead of bare HTTP methods or high-cardinality paths.
+// names like "openid-configuration" instead of bare HTTP methods or
+// high-cardinality paths.
 // It is a no-op when no span is recording (tracing disabled), so it is safe to
 // install unconditionally — though the composition root installs it only when
 // tracing is enabled.

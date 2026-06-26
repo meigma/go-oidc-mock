@@ -3,7 +3,7 @@ package http
 import (
 	"net/http"
 
-	"github.com/meigma/template-go-api/internal/observability"
+	"github.com/meigma/go-oidc-mock/internal/observability"
 )
 
 // NewMetricsHandler returns a minimal handler that serves the Prometheus metrics

@@ -19,11 +19,9 @@ const genericTooManyRequests = "rate limit exceeded; retry later"
 // request proceeds), so a key-extraction failure cannot deny all traffic.
 type KeyFunc func(ctx huma.Context) (string, error)
 
-// Middleware enforces a per-client rate limit as Huma middleware. Installed
-// before the authentication middleware (see Install), it rejects an over-limit
-// request with an RFC 9457 429 before authentication runs, so a flood never
-// reaches the credential store. It is inert (pass-through) when disabled — the
-// escape hatch matching the authz tier.
+// Middleware enforces a per-client rate limit as Huma middleware. It rejects an
+// over-limit request with an RFC 9457 429. It is inert (pass-through) when
+// disabled.
 type Middleware struct {
 	api     huma.API
 	limiter Limiter
@@ -56,13 +54,11 @@ func NewMiddleware(
 	}
 }
 
-// Install registers the rate-limit middleware on the API. Like the authz
-// middleware it must run before huma.Register (Huma snapshots the API's
-// middleware stack into each operation at registration time, so middleware
-// added afterward never runs), and it should be installed before the
-// authentication middleware so limiting happens pre-auth. It is a no-op when
-// disabled. The infrastructure routes (/healthz, /readyz, /metrics) bypass Huma,
-// so they are never rate limited.
+// Install registers the rate-limit middleware on the API. It must run before
+// huma.Register because Huma snapshots the API's middleware stack into each
+// operation at registration time. It is a no-op when disabled. The
+// infrastructure routes (/healthz, /readyz, /metrics) bypass Huma, so they are
+// never rate limited.
 func (m *Middleware) Install() {
 	if !m.enabled {
 		return

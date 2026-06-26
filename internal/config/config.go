@@ -1,10 +1,11 @@
 // Package config defines the API server's runtime configuration, loaded from
-// flags and TEMPLATE_GO_API_* environment variables via Viper.
+// flags and GO_OIDC_MOCK_* environment variables via Viper.
 package config
 
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -23,30 +24,15 @@ const (
 	defaultShutdownGrace     = 15 * time.Second
 	defaultLogLevel          = "info"
 	defaultLogFormat         = "json"
-	defaultDBMaxConns        = 0
-	// defaultAuthzEnabled is true: the todo routes now carry their authorization
-	// declarations and the engine merges the base policies with each slice's
-	// Contribution, so the deny-by-default middleware protects the API out of the
-	// box. Operators set it false as an escape hatch to bypass authorization
-	// entirely (incremental adoption or local debugging).
-	defaultAuthzEnabled = true
-	// defaultRateLimitEnabled is true: the API is rate limited out of the box
-	// (per client IP, pre-auth), a secure default that also shields the
-	// credential store from anonymous floods. Operators set it false to disable
-	// throttling entirely.
-	defaultRateLimitEnabled = true
-	// defaultRateLimitRPS is the sustained per-client request rate (requests per
-	// second). It is deliberately generous so local development and the demo
-	// stack are not throttled; tune it down for production.
-	defaultRateLimitRPS = 10.0
-	// defaultRateLimitBurst is the per-client token-bucket depth: how many
-	// requests a client may make in a burst before the sustained rate applies.
-	defaultRateLimitBurst = 20
-	// defaultTracingEnabled is false: distributed tracing requires an external
-	// OpenTelemetry collector, so it is opt-in. Enable it and configure the
-	// exporter via the standard OTEL_* environment variables.
-	defaultTracingEnabled = false
+	defaultRateLimitEnabled  = true
+	defaultRateLimitRPS      = 10.0
+	defaultRateLimitBurst    = 20
+	defaultTracingEnabled    = false
 )
+
+// DefaultIssuerURL is the default external issuer URL advertised by the mock
+// provider.
+const DefaultIssuerURL = "http://localhost:8080"
 
 // Config holds runtime settings for the API server.
 type Config struct {
@@ -55,6 +41,9 @@ type Config struct {
 	// MetricsAddr is the host:port of the dedicated listener that serves /metrics
 	// off the main API surface and its middleware. Empty co-locates /metrics on Addr.
 	MetricsAddr string
+	// IssuerURL is the externally visible OIDC issuer URL used in discovery
+	// metadata and protocol endpoint URLs.
+	IssuerURL string
 	// ReadTimeout bounds the time spent reading an entire request.
 	ReadTimeout time.Duration
 	// ReadHeaderTimeout bounds the time spent reading request headers.
@@ -78,25 +67,9 @@ type Config struct {
 	// read the client IP from. Empty (the default) trusts only the direct TCP
 	// peer, which cannot be spoofed.
 	TrustedProxyHeader string
-	// DatabaseURL is the PostgreSQL connection string. It is required: the
-	// template persists exclusively to PostgreSQL.
-	DatabaseURL string
-	// DBMaxConns caps the PostgreSQL connection pool size. Zero leaves the
-	// driver default in place.
-	DBMaxConns int32
-	// AuthzEnabled is the authorization master switch. It defaults to true now
-	// that the routes carry their authorization declarations: the deny-by-default
-	// middleware protects the API out of the box. When false the authz middleware
-	// is inert (pass-through), the escape hatch for incremental adoption or local
-	// debugging.
-	AuthzEnabled bool
-	// AuthzPolicyDir optionally loads .cedar policy files from a directory
-	// instead of the embedded set. Empty (the default) uses the embedded
-	// policies.
-	AuthzPolicyDir string
 	// RateLimitEnabled is the rate-limiting master switch. It defaults to true:
-	// the API is throttled per client IP before authentication runs. When false
-	// the rate-limit middleware is inert (pass-through).
+	// the API is throttled per client IP. When false the rate-limit middleware
+	// is inert.
 	RateLimitEnabled bool
 	// RateLimitRPS is the sustained per-client request rate, in requests per
 	// second, when rate limiting is enabled.
@@ -119,6 +92,7 @@ func RegisterFlags(flags *pflag.FlagSet) {
 		defaultMetricsAddr,
 		"host:port for the dedicated /metrics listener; empty serves /metrics on --addr",
 	)
+	flags.String("issuer-url", DefaultIssuerURL, "external OIDC issuer URL advertised by discovery metadata")
 	flags.String("log-level", defaultLogLevel, "log level: debug, info, warn, or error")
 	flags.String("log-format", defaultLogFormat, "log format: json or text")
 	flags.Duration("read-timeout", defaultReadTimeout, "maximum duration for reading an entire request")
@@ -132,18 +106,6 @@ func RegisterFlags(flags *pflag.FlagSet) {
 		"trusted-proxy-header",
 		"",
 		"proxy header to read the client IP from (for example X-Real-IP); empty trusts the TCP peer",
-	)
-	flags.String("database-url", "", "PostgreSQL connection URL (required)")
-	flags.Int32("db-max-conns", defaultDBMaxConns, "maximum PostgreSQL pool connections; 0 uses the driver default")
-	flags.Bool(
-		"authz-enabled",
-		defaultAuthzEnabled,
-		"enable the authorization middleware (deny-by-default); false bypasses it entirely",
-	)
-	flags.String(
-		"authz-policy-dir",
-		"",
-		"directory of .cedar policy files to load instead of the embedded policies; empty uses the embedded set",
 	)
 	flags.Bool(
 		"rate-limit-enabled",
@@ -166,6 +128,7 @@ func Load(vp *viper.Viper) Config {
 	return Config{
 		Addr:               vp.GetString("addr"),
 		MetricsAddr:        vp.GetString("metrics-addr"),
+		IssuerURL:          strings.TrimSpace(vp.GetString("issuer-url")),
 		ReadTimeout:        vp.GetDuration("read-timeout"),
 		ReadHeaderTimeout:  vp.GetDuration("read-header-timeout"),
 		WriteTimeout:       vp.GetDuration("write-timeout"),
@@ -176,10 +139,6 @@ func Load(vp *viper.Viper) Config {
 		LogFormat:          vp.GetString("log-format"),
 		CORSAllowedOrigins: vp.GetStringSlice("cors-allowed-origins"),
 		TrustedProxyHeader: vp.GetString("trusted-proxy-header"),
-		DatabaseURL:        vp.GetString("database-url"),
-		DBMaxConns:         vp.GetInt32("db-max-conns"),
-		AuthzEnabled:       vp.GetBool("authz-enabled"),
-		AuthzPolicyDir:     vp.GetString("authz-policy-dir"),
 		RateLimitEnabled:   vp.GetBool("rate-limit-enabled"),
 		RateLimitRPS:       vp.GetFloat64("rate-limit-rps"),
 		RateLimitBurst:     vp.GetInt("rate-limit-burst"),
@@ -195,6 +154,9 @@ func (c Config) Validate() error {
 	if c.MetricsAddr != "" && c.MetricsAddr == c.Addr {
 		return errors.New("metrics-addr must differ from addr")
 	}
+	if err := validateIssuerURL(c.IssuerURL); err != nil {
+		return err
+	}
 	if c.RequestTimeout <= 0 {
 		return errors.New("request-timeout must be positive")
 	}
@@ -203,9 +165,6 @@ func (c Config) Validate() error {
 	}
 	if c.LogFormat != "json" && c.LogFormat != "text" {
 		return fmt.Errorf("log-format must be %q or %q, got %q", "json", "text", c.LogFormat)
-	}
-	if strings.TrimSpace(c.DatabaseURL) == "" {
-		return errors.New("database-url is required")
 	}
 	if c.RateLimitEnabled {
 		if c.RateLimitRPS <= 0 {
@@ -219,9 +178,28 @@ func (c Config) Validate() error {
 	return nil
 }
 
+func validateIssuerURL(raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("issuer-url must be a valid URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return errors.New("issuer-url must use http or https")
+	}
+	if parsed.Host == "" {
+		return errors.New("issuer-url must include a host")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return errors.New("issuer-url must not include a query or fragment")
+	}
+
+	return nil
+}
+
 func setDefaults(vp *viper.Viper) {
 	vp.SetDefault("addr", defaultAddr)
 	vp.SetDefault("metrics-addr", defaultMetricsAddr)
+	vp.SetDefault("issuer-url", DefaultIssuerURL)
 	vp.SetDefault("read-timeout", defaultReadTimeout)
 	vp.SetDefault("read-header-timeout", defaultReadHeaderTimeout)
 	vp.SetDefault("write-timeout", defaultWriteTimeout)
@@ -232,10 +210,6 @@ func setDefaults(vp *viper.Viper) {
 	vp.SetDefault("log-format", defaultLogFormat)
 	vp.SetDefault("cors-allowed-origins", []string{})
 	vp.SetDefault("trusted-proxy-header", "")
-	vp.SetDefault("database-url", "")
-	vp.SetDefault("db-max-conns", defaultDBMaxConns)
-	vp.SetDefault("authz-enabled", defaultAuthzEnabled)
-	vp.SetDefault("authz-policy-dir", "")
 	vp.SetDefault("rate-limit-enabled", defaultRateLimitEnabled)
 	vp.SetDefault("rate-limit-rps", defaultRateLimitRPS)
 	vp.SetDefault("rate-limit-burst", defaultRateLimitBurst)
