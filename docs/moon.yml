@@ -7,8 +7,8 @@ tags:
   - 'uv'
 
 project:
-  title: 'template-go-api docs'
-  description: 'MkDocs documentation site for the Meigma Go web API server template.'
+  title: 'go-oidc-mock docs'
+  description: 'MkDocs documentation site for go-oidc-mock.'
   owner: 'meigma'
   maintainers:
     - 'meigma'

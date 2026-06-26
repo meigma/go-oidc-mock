@@ -1,7 +1,6 @@
-package config
+package config_test
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -9,126 +8,119 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/meigma/go-oidc-mock/internal/config"
 )
 
 func TestLoadDefaults(t *testing.T) {
 	t.Parallel()
 
-	cfg := Load(viper.New())
-	assert.Equal(t, defaultAddr, cfg.Addr)
-	assert.Equal(t, defaultMetricsAddr, cfg.MetricsAddr)
-	assert.Equal(t, defaultLogLevel, cfg.LogLevel)
-	assert.Equal(t, defaultLogFormat, cfg.LogFormat)
-	assert.Equal(t, defaultRequestTimeout, cfg.RequestTimeout)
+	cfg := config.Load(viper.New())
+
+	assert.Equal(t, ":8080", cfg.Addr)
+	assert.Equal(t, ":9090", cfg.MetricsAddr)
+	assert.Equal(t, config.DefaultIssuerURL, cfg.IssuerURL)
+	assert.Equal(t, 5*time.Second, cfg.ReadTimeout)
+	assert.Equal(t, 5*time.Second, cfg.ReadHeaderTimeout)
+	assert.Equal(t, 10*time.Second, cfg.WriteTimeout)
+	assert.Equal(t, 120*time.Second, cfg.IdleTimeout)
+	assert.Equal(t, 15*time.Second, cfg.RequestTimeout)
+	assert.Equal(t, 15*time.Second, cfg.ShutdownGrace)
+	assert.Equal(t, "info", cfg.LogLevel)
+	assert.Equal(t, "json", cfg.LogFormat)
 	assert.Empty(t, cfg.CORSAllowedOrigins)
 	assert.Empty(t, cfg.TrustedProxyHeader)
-	assert.Empty(t, cfg.DatabaseURL)
-	assert.Zero(t, cfg.DBMaxConns)
-	assert.True(t, cfg.AuthzEnabled, "authz is enabled by default now that the routes are tagged")
-	assert.Empty(t, cfg.AuthzPolicyDir)
-	assert.True(t, cfg.RateLimitEnabled, "rate limiting is enabled by default")
-	assert.InDelta(t, defaultRateLimitRPS, cfg.RateLimitRPS, 0.0001)
-	assert.Equal(t, defaultRateLimitBurst, cfg.RateLimitBurst)
-	assert.False(t, cfg.TracingEnabled, "tracing is opt-in (needs an external collector)")
+	assert.True(t, cfg.RateLimitEnabled)
+	assert.InEpsilon(t, 10.0, cfg.RateLimitRPS, 0.001)
+	assert.Equal(t, 20, cfg.RateLimitBurst)
+	assert.False(t, cfg.TracingEnabled)
 }
 
-func TestLoadAuthzFromFlags(t *testing.T) {
+func TestLoadFromFlags(t *testing.T) {
 	t.Parallel()
 
 	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
-	RegisterFlags(flags)
-	require.NoError(t, flags.Set("authz-enabled", "true"))
-	require.NoError(t, flags.Set("authz-policy-dir", "/etc/policies"))
+	config.RegisterFlags(flags)
+
+	require.NoError(t, flags.Set("addr", ":9091"))
+	require.NoError(t, flags.Set("metrics-addr", ""))
+	require.NoError(t, flags.Set("issuer-url", "https://issuer.example.test"))
+	require.NoError(t, flags.Set("rate-limit-enabled", "false"))
+	require.NoError(t, flags.Set("tracing-enabled", "true"))
 
 	vp := viper.New()
 	require.NoError(t, vp.BindPFlags(flags))
 
-	cfg := Load(vp)
-	assert.True(t, cfg.AuthzEnabled)
-	assert.Equal(t, "/etc/policies", cfg.AuthzPolicyDir)
-}
+	cfg := config.Load(vp)
 
-func TestLoadEnvOverride(t *testing.T) {
-	t.Setenv("TEMPLATE_GO_API_ADDR", ":9999")
-	t.Setenv("TEMPLATE_GO_API_LOG_LEVEL", "debug")
-	t.Setenv("TEMPLATE_GO_API_TRUSTED_PROXY_HEADER", "X-Real-IP")
-
-	vp := viper.New()
-	vp.SetEnvPrefix("TEMPLATE_GO_API")
-	vp.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
-	vp.AutomaticEnv()
-
-	cfg := Load(vp)
-	assert.Equal(t, ":9999", cfg.Addr)
-	assert.Equal(t, "debug", cfg.LogLevel)
-	assert.Equal(t, "X-Real-IP", cfg.TrustedProxyHeader)
-}
-
-func TestLoadCORSOriginsFromFlags(t *testing.T) {
-	t.Parallel()
-
-	flags := pflag.NewFlagSet("test", pflag.ContinueOnError)
-	RegisterFlags(flags)
-	require.NoError(t, flags.Set("cors-allowed-origins", "https://a.example,https://b.example"))
-
-	vp := viper.New()
-	require.NoError(t, vp.BindPFlags(flags))
-
-	cfg := Load(vp)
-	assert.Equal(t, []string{"https://a.example", "https://b.example"}, cfg.CORSAllowedOrigins)
+	assert.Equal(t, ":9091", cfg.Addr)
+	assert.Empty(t, cfg.MetricsAddr)
+	assert.Equal(t, "https://issuer.example.test", cfg.IssuerURL)
+	assert.False(t, cfg.RateLimitEnabled)
+	assert.True(t, cfg.TracingEnabled)
 }
 
 func TestValidate(t *testing.T) {
 	t.Parallel()
 
-	base := Config{
-		Addr:           ":8080",
-		RequestTimeout: time.Second,
-		ShutdownGrace:  time.Second,
-		LogFormat:      "json",
-		DatabaseURL:    "postgres://localhost:5432/app",
-	}
+	base := config.Load(viper.New())
 	require.NoError(t, base.Validate())
 
-	emptyAddr := base
-	emptyAddr.Addr = ""
-	require.Error(t, emptyAddr.Validate())
+	tests := []struct {
+		name   string
+		mutate func(*config.Config)
+	}{
+		{
+			name: "empty addr",
+			mutate: func(cfg *config.Config) {
+				cfg.Addr = ""
+			},
+		},
+		{
+			name: "matching metrics addr",
+			mutate: func(cfg *config.Config) {
+				cfg.MetricsAddr = cfg.Addr
+			},
+		},
+		{
+			name: "issuer without scheme",
+			mutate: func(cfg *config.Config) {
+				cfg.IssuerURL = "localhost:8080"
+			},
+		},
+		{
+			name: "issuer with query",
+			mutate: func(cfg *config.Config) {
+				cfg.IssuerURL = "https://issuer.example.test?tenant=a"
+			},
+		},
+		{
+			name: "bad log format",
+			mutate: func(cfg *config.Config) {
+				cfg.LogFormat = "pretty"
+			},
+		},
+		{
+			name: "bad rate limit rps",
+			mutate: func(cfg *config.Config) {
+				cfg.RateLimitRPS = 0
+			},
+		},
+		{
+			name: "bad rate limit burst",
+			mutate: func(cfg *config.Config) {
+				cfg.RateLimitBurst = 0
+			},
+		},
+	}
 
-	badFormat := base
-	badFormat.LogFormat = "xml"
-	require.Error(t, badFormat.Validate())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	metricsSameAsAddr := base
-	metricsSameAsAddr.MetricsAddr = base.Addr
-	require.Error(t, metricsSameAsAddr.Validate())
-
-	negativeTimeout := base
-	negativeTimeout.RequestTimeout = -time.Second
-	require.Error(t, negativeTimeout.Validate())
-
-	missingDatabaseURL := base
-	missingDatabaseURL.DatabaseURL = ""
-	require.Error(t, missingDatabaseURL.Validate())
-
-	// Rate-limit settings are validated only when rate limiting is enabled.
-	rateLimited := base
-	rateLimited.RateLimitEnabled = true
-	rateLimited.RateLimitRPS = 10
-	rateLimited.RateLimitBurst = 20
-	require.NoError(t, rateLimited.Validate())
-
-	zeroRPS := rateLimited
-	zeroRPS.RateLimitRPS = 0
-	require.Error(t, zeroRPS.Validate())
-
-	zeroBurst := rateLimited
-	zeroBurst.RateLimitBurst = 0
-	require.Error(t, zeroBurst.Validate())
-
-	// With rate limiting disabled, non-positive values are ignored.
-	disabledIgnoresValues := base
-	disabledIgnoresValues.RateLimitEnabled = false
-	disabledIgnoresValues.RateLimitRPS = 0
-	disabledIgnoresValues.RateLimitBurst = 0
-	require.NoError(t, disabledIgnoresValues.Validate())
+			cfg := base
+			tt.mutate(&cfg)
+			require.Error(t, cfg.Validate())
+		})
+	}
 }

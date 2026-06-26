@@ -13,7 +13,7 @@ const (
 	testVersion = "0.1.0"
 	testCommit  = "abc1234"
 	testDate    = "2026-05-08T10:00:00Z"
-	wantVersion = "template-go-api 0.1.0 (abc1234) built 2026-05-08T10:00:00Z\n"
+	wantVersion = "go-oidc-mock 0.1.0 (abc1234) built 2026-05-08T10:00:00Z\n"
 )
 
 func testBuild() BuildInfo {

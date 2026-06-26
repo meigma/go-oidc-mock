@@ -1,7 +1,7 @@
 // Package http assembles the generic, resource-agnostic HTTP transport: the chi
 // router and middleware, the infrastructure routes (/healthz, /readyz, /metrics),
 // the Huma API, and server-less OpenAPI export. Resource operations are mounted by
-// their own adapter packages (for example, internal/todo/httpapi) through
+// their own adapter packages (for example, internal/oidc/httpapi) through
 // the Registrar seam.
 package http
 
@@ -14,7 +14,7 @@ import (
 )
 
 // apiTitle is the OpenAPI document title for this service.
-const apiTitle = "template-go-api"
+const apiTitle = "go-oidc-mock"
 
 // Registrar mounts resource operations onto a Huma API. Each resource's HTTP
 // adapter package provides one, and the composition root composes them.
@@ -30,10 +30,7 @@ func NewAPI(mux chi.Router, version string) huma.API {
 // OpenAPI 3.0.3 specification as YAML, without binding a network listener.
 //
 // finalize, when non-nil, runs after the operations are registered and before
-// the document is serialized. The composition root passes the authz hook here so
-// the server-less export carries the same security scheme and per-operation
-// requirements the running server installs — keeping the committed spec in step
-// with the enforced protection. It is nil when authorization is disabled.
+// the document is serialized.
 func SpecYAML(version string, register Registrar, finalize func(huma.API)) ([]byte, error) {
 	api := NewAPI(chi.NewMux(), version)
 	if register != nil {

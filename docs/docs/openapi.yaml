@@ -1,22 +1,5 @@
 components:
   schemas:
-    CreateTodoInputBody:
-      additionalProperties: false
-      properties:
-        $schema:
-          description: A URL to the JSON Schema for this object.
-          example: https://example.com/schemas/CreateTodoInputBody.json
-          format: uri
-          readOnly: true
-          type: string
-        title:
-          description: Human-readable title of the todo.
-          maxLength: 200
-          minLength: 1
-          type: string
-      required:
-        - title
-      type: object
     ErrorDetail:
       additionalProperties: false
       properties:
@@ -69,101 +52,112 @@ components:
           format: uri
           type: string
       type: object
-    ListTodosOutputBody:
+    JWKS:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
-          example: https://example.com/schemas/ListTodosOutputBody.json
+          example: https://example.com/schemas/JWKS.json
           format: uri
           readOnly: true
           type: string
-        nextCursor:
-          description: Opaque cursor for the next page; omitted when this is the last page.
-          type: string
-        todos:
-          description: The page of todos, oldest first.
+        keys:
           items:
-            $ref: "#/components/schemas/TodoDTO"
+            additionalProperties: {}
+            type: object
           nullable: true
           type: array
       required:
-        - todos
+        - keys
       type: object
-    TodoDTO:
+    ProviderMetadata:
       additionalProperties: false
       properties:
         $schema:
           description: A URL to the JSON Schema for this object.
-          example: https://example.com/schemas/TodoDTO.json
+          example: https://example.com/schemas/ProviderMetadata.json
           format: uri
           readOnly: true
           type: string
-        completedAt:
-          description: When the todo was completed, if set.
-          format: date-time
+        authorization_endpoint:
           type: string
-        createdAt:
-          description: When the todo was created.
-          format: date-time
+        claims_supported:
+          items:
+            type: string
+          nullable: true
+          type: array
+        code_challenge_methods_supported:
+          items:
+            type: string
+          nullable: true
+          type: array
+        grant_types_supported:
+          items:
+            type: string
+          nullable: true
+          type: array
+        id_token_signing_alg_values_supported:
+          items:
+            type: string
+          nullable: true
+          type: array
+        issuer:
           type: string
-        id:
-          description: Unique identifier of the todo.
+        jwks_uri:
           type: string
-        status:
-          description: Lifecycle state of the todo.
-          enum:
-            - open
-            - completed
+        response_types_supported:
+          items:
+            type: string
+          nullable: true
+          type: array
+        scopes_supported:
+          items:
+            type: string
+          nullable: true
+          type: array
+        subject_types_supported:
+          items:
+            type: string
+          nullable: true
+          type: array
+        token_endpoint:
           type: string
-        title:
-          description: Human-readable title of the todo.
+        token_endpoint_auth_methods_supported:
+          items:
+            type: string
+          nullable: true
+          type: array
+        userinfo_endpoint:
           type: string
       required:
-        - id
-        - title
-        - status
-        - createdAt
+        - issuer
+        - authorization_endpoint
+        - token_endpoint
+        - jwks_uri
+        - userinfo_endpoint
+        - scopes_supported
+        - response_types_supported
+        - grant_types_supported
+        - subject_types_supported
+        - id_token_signing_alg_values_supported
+        - token_endpoint_auth_methods_supported
+        - claims_supported
+        - code_challenge_methods_supported
       type: object
-  securitySchemes:
-    apiKey:
-      description: "API key supplied via the X-API-Key header or an Authorization: Bearer credential."
-      in: header
-      name: X-API-Key
-      type: apiKey
 info:
-  title: template-go-api
+  title: go-oidc-mock
   version: dev
 openapi: 3.0.3
 paths:
-  /v1/todos:
+  /.well-known/openid-configuration:
     get:
-      operationId: list-todos
-      parameters:
-        - description: Maximum number of todos to return per page.
-          explode: false
-          in: query
-          name: limit
-          schema:
-            default: 20
-            description: Maximum number of todos to return per page.
-            format: int64
-            maximum: 100
-            minimum: 1
-            type: integer
-        - description: Opaque pagination cursor copied from a previous response's nextCursor; omit for the first page.
-          explode: false
-          in: query
-          name: cursor
-          schema:
-            description: Opaque pagination cursor copied from a previous response's nextCursor; omit for the first page.
-            type: string
+      operationId: openid-configuration
       responses:
         "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/ListTodosOutputBody"
+                $ref: "#/components/schemas/ProviderMetadata"
           description: OK
         default:
           content:
@@ -171,118 +165,88 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      security:
-        - apiKey: []
-      summary: List todos
+      summary: Get OpenID provider configuration
       tags:
-        - Todos
-    post:
-      operationId: create-todo
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateTodoInputBody"
-        required: true
+        - OIDC
+  /jwks.json:
+    get:
+      operationId: jwks
       responses:
-        "201":
+        "200":
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/TodoDTO"
-          description: Created
+                $ref: "#/components/schemas/JWKS"
+          description: OK
         default:
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Error
-      security:
-        - apiKey: []
-      summary: Create a todo
+      summary: Get JSON Web Key Set
       tags:
-        - Todos
-  /v1/todos/{id}:
+        - OIDC
+  /oauth2/authorize:
     get:
-      operationId: get-todo
-      parameters:
-        - description: Unique identifier of the todo.
-          in: path
-          name: id
-          required: true
-          schema:
-            description: Unique identifier of the todo.
-            maxLength: 64
-            type: string
+      operationId: authorize
       responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TodoDTO"
-          description: OK
-        "404":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Not Found
-        "422":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Unprocessable Entity
+        "204":
+          description: No Content
         "500":
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
-      security:
-        - apiKey: []
-      summary: Get a todo by id
+        "501":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Implemented
+      summary: Start OAuth authorization
       tags:
-        - Todos
-  /v1/todos/{id}/complete:
+        - OIDC
+  /oauth2/token:
     post:
-      operationId: complete-todo
-      parameters:
-        - description: Unique identifier of the todo.
-          in: path
-          name: id
-          required: true
-          schema:
-            description: Unique identifier of the todo.
-            maxLength: 64
-            type: string
+      operationId: token
       responses:
-        "200":
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/TodoDTO"
-          description: OK
-        "404":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Not Found
-        "422":
-          content:
-            application/problem+json:
-              schema:
-                $ref: "#/components/schemas/ErrorModel"
-          description: Unprocessable Entity
+        "204":
+          description: No Content
         "500":
           content:
             application/problem+json:
               schema:
                 $ref: "#/components/schemas/ErrorModel"
           description: Internal Server Error
-      security:
-        - apiKey: []
-      summary: Mark a todo as completed
+        "501":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Implemented
+      summary: Exchange OAuth token
       tags:
-        - Todos
+        - OIDC
+  /userinfo:
+    get:
+      operationId: userinfo
+      responses:
+        "204":
+          description: No Content
+        "500":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Internal Server Error
+        "501":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ErrorModel"
+          description: Not Implemented
+      summary: Get UserInfo claims
+      tags:
+        - OIDC

@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/meigma/template-go-api/internal/logctx"
+	"github.com/meigma/go-oidc-mock/internal/logctx"
 )
 
 func TestWithLoggerRoundTrip(t *testing.T) {

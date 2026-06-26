@@ -8,7 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
-	"github.com/meigma/template-go-api/internal/config"
+	"github.com/meigma/go-oidc-mock/internal/config"
 )
 
 // BuildInfo describes linker-injected build metadata printed by --version.
@@ -35,7 +35,7 @@ type Options struct {
 	Viper *viper.Viper
 }
 
-// NewRootCommand creates the template-go-api Cobra command tree. The root runs
+// NewRootCommand creates the go-oidc-mock Cobra command tree. The root runs
 // the HTTP server (the same as the serve subcommand) when invoked with no
 // subcommand.
 func NewRootCommand(options Options) *cobra.Command {
@@ -54,9 +54,9 @@ func NewRootCommand(options Options) *cobra.Command {
 	options.Build = options.Build.withDefaults()
 
 	root := &cobra.Command{
-		Use:           "template-go-api",
-		Short:         "Meigma Go web API server template",
-		Long:          "template-go-api runs a small HTTP API server built on chi and Huma.",
+		Use:           "go-oidc-mock",
+		Short:         "Mock OIDC/OAuth server for tests",
+		Long:          "go-oidc-mock runs a configurable mock OIDC/OAuth server for tests.",
 		Version:       options.Build.Version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
@@ -75,7 +75,6 @@ func NewRootCommand(options Options) *cobra.Command {
 	root.AddCommand(newServeCommand(options))
 	root.AddCommand(newVersionCommand(options))
 	root.AddCommand(newOpenAPICommand(options))
-	root.AddCommand(newMigrateCommand(options))
 
 	return root
 }
@@ -83,7 +82,7 @@ func NewRootCommand(options Options) *cobra.Command {
 // versionLine formats the single-line build metadata used by both the
 // --version flag and the version subcommand.
 func versionLine(build BuildInfo) string {
-	return fmt.Sprintf("template-go-api %s (%s) built %s", build.Version, build.Commit, build.Date)
+	return fmt.Sprintf("go-oidc-mock %s (%s) built %s", build.Version, build.Commit, build.Date)
 }
 
 func (b BuildInfo) withDefaults() BuildInfo {
@@ -101,7 +100,7 @@ func (b BuildInfo) withDefaults() BuildInfo {
 }
 
 func initializeConfig(cmd *cobra.Command, vp *viper.Viper) error {
-	vp.SetEnvPrefix("TEMPLATE_GO_API")
+	vp.SetEnvPrefix("GO_OIDC_MOCK")
 	vp.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 	vp.AutomaticEnv()
 

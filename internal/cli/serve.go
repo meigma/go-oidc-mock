@@ -5,9 +5,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/meigma/template-go-api/internal/app"
-	"github.com/meigma/template-go-api/internal/config"
-	"github.com/meigma/template-go-api/internal/observability"
+	"github.com/meigma/go-oidc-mock/internal/app"
+	"github.com/meigma/go-oidc-mock/internal/config"
+	"github.com/meigma/go-oidc-mock/internal/observability"
 )
 
 // newServeCommand builds the serve subcommand, which runs the HTTP API server.
