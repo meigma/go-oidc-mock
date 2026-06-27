@@ -24,6 +24,7 @@ func TestAppWiring(t *testing.T) {
 
 	vp := viper.New()
 	vp.Set("issuer-url", "https://issuer.example.test")
+	vp.Set("profile-dir", t.TempDir())
 	cfg := config.Load(vp)
 	logger := observability.NewLogger(io.Discard, slog.LevelError, "json")
 
@@ -64,6 +65,7 @@ func TestAppWiringRateLimits(t *testing.T) {
 	t.Parallel()
 
 	vp := viper.New()
+	vp.Set("profile-dir", t.TempDir())
 	vp.Set("rate-limit-rps", 1)
 	vp.Set("rate-limit-burst", 1)
 	cfg := config.Load(vp)

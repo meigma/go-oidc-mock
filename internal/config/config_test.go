@@ -20,6 +20,7 @@ func TestLoadDefaults(t *testing.T) {
 	assert.Equal(t, ":8080", cfg.Addr)
 	assert.Equal(t, ":9090", cfg.MetricsAddr)
 	assert.Equal(t, config.DefaultIssuerURL, cfg.IssuerURL)
+	assert.Equal(t, config.DefaultProfileDir, cfg.ProfileDir)
 	assert.Equal(t, 5*time.Second, cfg.ReadTimeout)
 	assert.Equal(t, 5*time.Second, cfg.ReadHeaderTimeout)
 	assert.Equal(t, 10*time.Second, cfg.WriteTimeout)
@@ -45,6 +46,7 @@ func TestLoadFromFlags(t *testing.T) {
 	require.NoError(t, flags.Set("addr", ":9091"))
 	require.NoError(t, flags.Set("metrics-addr", ""))
 	require.NoError(t, flags.Set("issuer-url", "https://issuer.example.test"))
+	require.NoError(t, flags.Set("profile-dir", "/tmp/profiles"))
 	require.NoError(t, flags.Set("rate-limit-enabled", "false"))
 	require.NoError(t, flags.Set("tracing-enabled", "true"))
 
@@ -56,6 +58,7 @@ func TestLoadFromFlags(t *testing.T) {
 	assert.Equal(t, ":9091", cfg.Addr)
 	assert.Empty(t, cfg.MetricsAddr)
 	assert.Equal(t, "https://issuer.example.test", cfg.IssuerURL)
+	assert.Equal(t, "/tmp/profiles", cfg.ProfileDir)
 	assert.False(t, cfg.RateLimitEnabled)
 	assert.True(t, cfg.TracingEnabled)
 }

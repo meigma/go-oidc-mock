@@ -43,11 +43,11 @@ const (
 	// DefaultLoopbackRedirectURI is the built-in loopback redirect URI.
 	DefaultLoopbackRedirectURI = "http://127.0.0.1:3000/callback"
 
-	// DefaultSubject is the fixed subject used by phase-2 auto-approval.
+	// DefaultSubject is the fixed fallback subject used when no profiles are mounted.
 	DefaultSubject = "go-oidc-mock-user"
-	// DefaultName is the fixed name claim used by phase-2 auto-approval.
+	// DefaultName is the fixed fallback name claim used when no profiles are mounted.
 	DefaultName = "Mock User"
-	// DefaultEmail is the fixed email claim used by phase-2 auto-approval.
+	// DefaultEmail is the fixed fallback email claim used when no profiles are mounted.
 	DefaultEmail = "user@example.test"
 )
 
@@ -65,7 +65,8 @@ type Service struct {
 }
 
 type serviceConfig struct {
-	clients []*goidc.Client
+	clients  []*goidc.Client
+	profiles []Profile
 }
 
 // ServiceOption customizes Service construction for internal tests and future wiring.
@@ -75,6 +76,13 @@ type ServiceOption func(*serviceConfig)
 func WithClients(clients ...*goidc.Client) ServiceOption {
 	return func(cfg *serviceConfig) {
 		cfg.clients = cloneClients(clients)
+	}
+}
+
+// WithProfiles replaces the startup profiles used by auto-approval.
+func WithProfiles(profiles ...Profile) ServiceOption {
+	return func(cfg *serviceConfig) {
+		cfg.profiles = cloneProfiles(profiles)
 	}
 }
 
@@ -92,6 +100,11 @@ func NewServiceWithOptions(issuerURL string, opts ...ServiceOption) (*Service, e
 	if len(cfg.clients) == 0 {
 		return nil, errors.New("at least one static client is required")
 	}
+	profiles, err := NormalizeProfiles(cfg.profiles)
+	if err != nil {
+		return nil, fmt.Errorf("validate profiles: %w", err)
+	}
+	defaultProfile := SelectDefaultProfile(profiles)
 
 	issuer, err := normalizeIssuerURL(issuerURL)
 	if err != nil {
@@ -122,7 +135,7 @@ func NewServiceWithOptions(issuerURL string, opts ...ServiceOption) (*Service, e
 		provider.WithSecretBasicAuthn(),
 		provider.WithSecretPostAuthn(),
 		provider.WithStaticClients(cfg.clients[0], cfg.clients[1:]...),
-		provider.WithPolicies(autoApprovePolicy()),
+		provider.WithPolicies(autoApprovePolicy(defaultProfile)),
 		provider.WithIDTokenClaims(idTokenClaimsFromStore(idClaimsStoreKey)),
 		provider.WithUserInfoClaims(userInfoClaimsFromStore(infoClaimsStoreKey)),
 		provider.WithJTIConsumer(func(context.Context, string) error {
@@ -212,35 +225,37 @@ func cloneClients(clients []*goidc.Client) []*goidc.Client {
 	return cloned
 }
 
-func autoApprovePolicy() goidc.AuthnPolicy {
+func cloneProfiles(profiles []Profile) []Profile {
+	cloned := make([]Profile, 0, len(profiles))
+	for _, profile := range profiles {
+		cloned = append(cloned, profile.clone())
+	}
+
+	return cloned
+}
+
+func autoApprovePolicy(profile Profile) goidc.AuthnPolicy {
 	return goidc.NewPolicy(
 		autoApprovePolicyID,
 		func(_ *http.Request, _ *goidc.AuthnSession, _ *goidc.Client) bool {
 			return true
 		},
 		func(_ http.ResponseWriter, _ *http.Request, session *goidc.AuthnSession, _ *goidc.Client) (goidc.Status, error) {
-			session.Subject = DefaultSubject
-			session.Username = DefaultSubject
+			claims := profile.UserClaims()
+			session.Subject = profile.Subject
+			session.Username = profile.Subject
 			session.GrantedScopes = session.Scopes
 			session.GrantedResources = session.Resources
 			session.GrantedAuthDetails = session.AuthDetails
 			if session.Store == nil {
 				session.Store = map[string]any{}
 			}
-			session.Store[idClaimsStoreKey] = defaultUserClaims()
-			session.Store[infoClaimsStoreKey] = defaultUserClaims()
+			session.Store[idClaimsStoreKey] = claims
+			session.Store[infoClaimsStoreKey] = claims
 
 			return goidc.StatusSuccess, nil
 		},
 	)
-}
-
-func defaultUserClaims() map[string]any {
-	return map[string]any{
-		goidc.ClaimName:          DefaultName,
-		goidc.ClaimEmail:         DefaultEmail,
-		goidc.ClaimEmailVerified: true,
-	}
 }
 
 func idTokenClaimsFromStore(key string) goidc.IDTokenClaimsFunc {

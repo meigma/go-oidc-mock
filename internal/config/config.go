@@ -28,11 +28,15 @@ const (
 	defaultRateLimitRPS      = 10.0
 	defaultRateLimitBurst    = 20
 	defaultTracingEnabled    = false
+	defaultProfileDir        = "/etc/go-oidc-mock/profiles"
 )
 
 // DefaultIssuerURL is the default external issuer URL advertised by the mock
 // provider.
 const DefaultIssuerURL = "http://localhost:8080"
+
+// DefaultProfileDir is the default directory for mounted JSON profile files.
+const DefaultProfileDir = defaultProfileDir
 
 // Config holds runtime settings for the API server.
 type Config struct {
@@ -44,6 +48,8 @@ type Config struct {
 	// IssuerURL is the externally visible OIDC issuer URL used in discovery
 	// metadata and protocol endpoint URLs.
 	IssuerURL string
+	// ProfileDir is the directory containing mounted JSON profile templates.
+	ProfileDir string
 	// ReadTimeout bounds the time spent reading an entire request.
 	ReadTimeout time.Duration
 	// ReadHeaderTimeout bounds the time spent reading request headers.
@@ -93,6 +99,7 @@ func RegisterFlags(flags *pflag.FlagSet) {
 		"host:port for the dedicated /metrics listener; empty serves /metrics on --addr",
 	)
 	flags.String("issuer-url", DefaultIssuerURL, "external OIDC issuer URL advertised by discovery metadata")
+	flags.String("profile-dir", DefaultProfileDir, "directory containing mounted JSON profile templates")
 	flags.String("log-level", defaultLogLevel, "log level: debug, info, warn, or error")
 	flags.String("log-format", defaultLogFormat, "log format: json or text")
 	flags.Duration("read-timeout", defaultReadTimeout, "maximum duration for reading an entire request")
@@ -129,6 +136,7 @@ func Load(vp *viper.Viper) Config {
 		Addr:               vp.GetString("addr"),
 		MetricsAddr:        vp.GetString("metrics-addr"),
 		IssuerURL:          strings.TrimSpace(vp.GetString("issuer-url")),
+		ProfileDir:         strings.TrimSpace(vp.GetString("profile-dir")),
 		ReadTimeout:        vp.GetDuration("read-timeout"),
 		ReadHeaderTimeout:  vp.GetDuration("read-header-timeout"),
 		WriteTimeout:       vp.GetDuration("write-timeout"),
@@ -200,6 +208,7 @@ func setDefaults(vp *viper.Viper) {
 	vp.SetDefault("addr", defaultAddr)
 	vp.SetDefault("metrics-addr", defaultMetricsAddr)
 	vp.SetDefault("issuer-url", DefaultIssuerURL)
+	vp.SetDefault("profile-dir", DefaultProfileDir)
 	vp.SetDefault("read-timeout", defaultReadTimeout)
 	vp.SetDefault("read-header-timeout", defaultReadHeaderTimeout)
 	vp.SetDefault("write-timeout", defaultWriteTimeout)

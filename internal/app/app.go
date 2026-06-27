@@ -13,6 +13,7 @@ import (
 	"golang.org/x/time/rate"
 
 	adapterhttp "github.com/meigma/go-oidc-mock/internal/adapter/http"
+	"github.com/meigma/go-oidc-mock/internal/adapter/profilefile"
 	"github.com/meigma/go-oidc-mock/internal/config"
 	"github.com/meigma/go-oidc-mock/internal/observability"
 	"github.com/meigma/go-oidc-mock/internal/oidc"
@@ -49,7 +50,12 @@ func New(
 	logger *slog.Logger,
 	version string,
 ) (*App, error) {
-	service, err := oidc.NewService(cfg.IssuerURL)
+	profiles, err := profilefile.Load(cfg.ProfileDir)
+	if err != nil {
+		return nil, fmt.Errorf("load profiles: %w", err)
+	}
+
+	service, err := oidc.NewServiceWithOptions(cfg.IssuerURL, oidc.WithProfiles(profiles...))
 	if err != nil {
 		return nil, fmt.Errorf("init oidc service: %w", err)
 	}

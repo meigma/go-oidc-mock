@@ -1,0 +1,13 @@
+{
+  "id": "default",
+  "label": "Default user",
+  "subject": "user-123",
+  "claims": {
+    "name": "Default User",
+    "email": "user@example.test",
+    "email_verified": true
+  },
+  "custom_claims": {
+    "roles": ["tester"]
+  }
+}

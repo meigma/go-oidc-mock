@@ -7,6 +7,9 @@ services:
     image: go-oidc-mock:dev
     environment:
       GO_OIDC_MOCK_ISSUER_URL: http://localhost:8080
+      GO_OIDC_MOCK_PROFILE_DIR: /etc/go-oidc-mock/profiles
+    volumes:
+      - ./examples/profiles:/etc/go-oidc-mock/profiles:ro
     ports:
       - "8080:8080"
       - "9090:9090"
