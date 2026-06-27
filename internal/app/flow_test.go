@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -45,6 +46,15 @@ type tokenResponse struct {
 	ExpiresIn    int    `json:"expires_in"`
 	TokenType    string `json:"token_type"`
 	Scopes       string `json:"scope"`
+}
+
+type authorizationApproval struct {
+	ProfileID     string
+	Subject       string
+	Name          string
+	Email         string
+	EmailVerified bool
+	CustomClaims  string
 }
 
 func TestPublicPKCEAuthorizationCodeFlow(t *testing.T) {
@@ -101,7 +111,16 @@ func TestMountedProfileAuthorizationCodeFlow(t *testing.T) {
 		requestScopes: "openid profile email",
 	}
 
-	code := authorizeCode(t, handler, authReq)
+	page := requestAuthorizationPage(t, handler, authReq)
+	assert.Contains(t, page, "Mounted User (default)")
+	code := approveAuthorizationPage(t, handler, page, authReq, authorizationApproval{
+		ProfileID:     "default",
+		Subject:       "mounted-user",
+		Name:          "Mounted User",
+		Email:         "mounted@example.test",
+		EmailVerified: true,
+		CustomClaims:  `{"roles":["tester","admin"]}`,
+	})
 	token := exchangePublicCode(t, handler, code, authReq)
 
 	userInfo := userInfo(t, handler, token.AccessToken)
@@ -117,6 +136,77 @@ func TestMountedProfileAuthorizationCodeFlow(t *testing.T) {
 	assert.Equal(t, "mounted@example.test", idTokenClaims["email"])
 	assert.Equal(t, true, idTokenClaims["email_verified"])
 	assert.Equal(t, []any{"tester", "admin"}, idTokenClaims["roles"])
+}
+
+func TestAuthorizationPagePrefillsFirstMountedProfileWithoutDefault(t *testing.T) {
+	t.Parallel()
+
+	profileDir := t.TempDir()
+	writeProfile(t, profileDir, "alpha.json", `{
+		"id": "alpha",
+		"label": "Alpha User",
+		"subject": "alpha-user",
+		"claims": {
+			"name": "Alpha User",
+			"email": "alpha@example.test",
+			"email_verified": true
+		}
+	}`)
+	handler := newFlowHandlerWithProfileDir(t, profileDir)
+	authReq := authorizeRequest{
+		clientID:      oidc.DefaultPublicClientID,
+		state:         "state-alpha-profile",
+		codeVerifier:  testPKCEVerifier,
+		redirectURI:   oidc.DefaultRedirectURI,
+		requestScopes: "openid profile email",
+	}
+
+	page := requestAuthorizationPage(t, handler, authReq)
+
+	assert.Contains(t, page, `value="alpha" selected`)
+	assert.Contains(t, page, `value="alpha-user"`)
+	assert.Contains(t, page, `value="Alpha User"`)
+	assert.Contains(t, page, `value="alpha@example.test"`)
+}
+
+func TestAuthorizationPageAllowsEditedClaims(t *testing.T) {
+	t.Parallel()
+
+	handler := newFlowHandler(t)
+	authReq := authorizeRequest{
+		clientID:      oidc.DefaultPublicClientID,
+		state:         "state-edited-claims",
+		codeVerifier:  testPKCEVerifier,
+		redirectURI:   oidc.DefaultRedirectURI,
+		requestScopes: "openid profile email",
+	}
+	approval := authorizationApproval{
+		ProfileID:     "default",
+		Subject:       "edited-user",
+		Name:          "Edited User",
+		Email:         "edited@example.test",
+		EmailVerified: false,
+		CustomClaims:  `{"roles":["operator"],"tenant":"alpha"}`,
+	}
+
+	code := authorizeCodeWithApproval(t, handler, authReq, approval)
+	token := exchangePublicCode(t, handler, code, authReq)
+
+	userInfo := userInfo(t, handler, token.AccessToken)
+	assert.Equal(t, "edited-user", userInfo["sub"])
+	assert.Equal(t, "Edited User", userInfo["name"])
+	assert.Equal(t, "edited@example.test", userInfo["email"])
+	assert.Equal(t, false, userInfo["email_verified"])
+	assert.Equal(t, []any{"operator"}, userInfo["roles"])
+	assert.Equal(t, "alpha", userInfo["tenant"])
+
+	idTokenClaims := jwtClaims(t, token.IDToken)
+	assert.Equal(t, "edited-user", idTokenClaims["sub"])
+	assert.Equal(t, "Edited User", idTokenClaims["name"])
+	assert.Equal(t, "edited@example.test", idTokenClaims["email"])
+	assert.Equal(t, false, idTokenClaims["email_verified"])
+	assert.Equal(t, []any{"operator"}, idTokenClaims["roles"])
+	assert.Equal(t, "alpha", idTokenClaims["tenant"])
 }
 
 func TestPublicClientRequiresPKCE(t *testing.T) {
@@ -184,6 +274,95 @@ func TestAuthorizationCodeReuseFails(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "invalid_grant")
 }
 
+func TestAuthorizationPageDenialRedirectsProtocolError(t *testing.T) {
+	t.Parallel()
+
+	handler := newFlowHandler(t)
+	authReq := authorizeRequest{
+		clientID:      oidc.DefaultPublicClientID,
+		state:         "state-denied",
+		codeVerifier:  testPKCEVerifier,
+		redirectURI:   oidc.DefaultRedirectURI,
+		requestScopes: "openid",
+	}
+
+	page := requestAuthorizationPage(t, handler, authReq)
+	rec := postForm(t, handler, authorizationActionURL(t, page), url.Values{
+		"action": {"deny"},
+	}, nil)
+	require.Equal(t, http.StatusSeeOther, rec.Code)
+
+	redirectURL, err := url.Parse(rec.Header().Get("Location"))
+	require.NoError(t, err)
+
+	assert.Equal(t, authReq.state, redirectURL.Query().Get("state"))
+	assert.Equal(t, "access_denied", redirectURL.Query().Get("error"))
+	assert.Empty(t, redirectURL.Query().Get("code"))
+}
+
+func TestAuthorizationPageValidationRerenders(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		mutate      func(url.Values)
+		wantMessage string
+	}{
+		{
+			name: "empty subject",
+			mutate: func(form url.Values) {
+				form.Set("subject", "")
+			},
+			wantMessage: "subject is required",
+		},
+		{
+			name: "malformed custom claims",
+			mutate: func(form url.Values) {
+				form.Set("custom_claims", `{"roles":`)
+			},
+			wantMessage: "custom_claims must be a JSON object",
+		},
+		{
+			name: "reserved custom claim",
+			mutate: func(form url.Values) {
+				form.Set("custom_claims", `{"sub":"override"}`)
+			},
+			wantMessage: "custom_claims.sub is reserved",
+		},
+		{
+			name: "null custom claims",
+			mutate: func(form url.Values) {
+				form.Set("custom_claims", `null`)
+			},
+			wantMessage: "custom_claims must be a JSON object",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			handler := newFlowHandler(t)
+			authReq := authorizeRequest{
+				clientID:      oidc.DefaultPublicClientID,
+				state:         "state-validation-" + strings.ReplaceAll(tt.name, " ", "-"),
+				codeVerifier:  testPKCEVerifier,
+				redirectURI:   oidc.DefaultRedirectURI,
+				requestScopes: "openid profile email",
+			}
+			page := requestAuthorizationPage(t, handler, authReq)
+			form := authorizationApprovalForm(defaultAuthorizationApproval())
+			tt.mutate(form)
+
+			rec := postForm(t, handler, authorizationActionURL(t, page), form, nil)
+
+			require.Equal(t, http.StatusOK, rec.Code)
+			assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
+			assert.Contains(t, rec.Body.String(), tt.wantMessage)
+		})
+	}
+}
+
 func TestAuthorizationCallbackRouteIsProviderOwned(t *testing.T) {
 	t.Parallel()
 
@@ -222,8 +401,32 @@ func newFlowHandlerWithProfileDir(t *testing.T, profileDir string) http.Handler 
 func authorizeCode(t *testing.T, handler http.Handler, authReq authorizeRequest) string {
 	t.Helper()
 
-	rec := requestAuthorization(t, handler, authReq)
-	require.Equal(t, http.StatusSeeOther, rec.Code)
+	return authorizeCodeWithApproval(t, handler, authReq, defaultAuthorizationApproval())
+}
+
+func authorizeCodeWithApproval(
+	t *testing.T,
+	handler http.Handler,
+	authReq authorizeRequest,
+	approval authorizationApproval,
+) string {
+	t.Helper()
+
+	page := requestAuthorizationPage(t, handler, authReq)
+	return approveAuthorizationPage(t, handler, page, authReq, approval)
+}
+
+func approveAuthorizationPage(
+	t *testing.T,
+	handler http.Handler,
+	page string,
+	authReq authorizeRequest,
+	approval authorizationApproval,
+) string {
+	t.Helper()
+
+	rec := postForm(t, handler, authorizationActionURL(t, page), authorizationApprovalForm(approval), nil)
+	require.Equal(t, http.StatusSeeOther, rec.Code, rec.Body.String())
 
 	redirectURL, err := url.Parse(rec.Header().Get("Location"))
 	require.NoError(t, err)
@@ -234,6 +437,57 @@ func authorizeCode(t *testing.T, handler http.Handler, authReq authorizeRequest)
 	require.NotEmpty(t, code)
 
 	return code
+}
+
+func requestAuthorizationPage(t *testing.T, handler http.Handler, authReq authorizeRequest) string {
+	t.Helper()
+
+	rec := requestAuthorization(t, handler, authReq)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Header().Get("Content-Type"), "text/html")
+
+	body := rec.Body.String()
+	assert.Contains(t, body, "Authorize")
+	assert.Contains(t, body, authReq.clientID)
+	assert.Contains(t, body, authReq.redirectURI)
+
+	return body
+}
+
+func authorizationActionURL(t *testing.T, page string) string {
+	t.Helper()
+
+	matches := regexp.MustCompile(`action="([^"]+)"`).FindStringSubmatch(page)
+	require.Len(t, matches, 2)
+
+	return matches[1]
+}
+
+func defaultAuthorizationApproval() authorizationApproval {
+	return authorizationApproval{
+		ProfileID:     "default",
+		Subject:       oidc.DefaultSubject,
+		Name:          oidc.DefaultName,
+		Email:         oidc.DefaultEmail,
+		EmailVerified: true,
+		CustomClaims:  `{}`,
+	}
+}
+
+func authorizationApprovalForm(approval authorizationApproval) url.Values {
+	form := url.Values{
+		"action":        {"approve"},
+		"profile_id":    {approval.ProfileID},
+		"subject":       {approval.Subject},
+		"name":          {approval.Name},
+		"email":         {approval.Email},
+		"custom_claims": {approval.CustomClaims},
+	}
+	if approval.EmailVerified {
+		form.Set("email_verified", "true")
+	}
+
+	return form
 }
 
 func requestAuthorization(t *testing.T, handler http.Handler, authReq authorizeRequest) *httptest.ResponseRecorder {
