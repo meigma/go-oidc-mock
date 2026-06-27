@@ -7,3 +7,4 @@
 | 003 | 2026-06-26 | Phase 1 Provider Spike | complete | Embedded go-oidc for discovery and JWKS and landed the phase 1 provider spike. |
 | 004 | 2026-06-26 | Continue Implementation | complete | Landed the minimal authorization-code flow with built-in clients, auto-approval, token exchange, and userinfo coverage. |
 | 005 | 2026-06-26 | Continue Implementation | complete | Landed mounted profile templates and wired the selected default profile into auto-approved OIDC claims. |
+| 006 | 2026-06-26 | Continue Implementation | in-progress | Continue implementation from the mounted profile baseline after reviewing the latest completed sessions. |
