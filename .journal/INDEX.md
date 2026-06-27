@@ -8,3 +8,4 @@
 | 004 | 2026-06-26 | Continue Implementation | complete | Landed the minimal authorization-code flow with built-in clients, auto-approval, token exchange, and userinfo coverage. |
 | 005 | 2026-06-26 | Continue Implementation | complete | Landed mounted profile templates and wired the selected default profile into auto-approved OIDC claims. |
 | 006 | 2026-06-26 | Combined Authorization Page | complete | Landed the phase 4 authorization page with profile selection, edited claim snapshots, denial handling, and functional flow coverage. |
+| 007 | 2026-06-27 | Continue Implementation | in-progress | Continue implementation from the combined authorization-page baseline. |
