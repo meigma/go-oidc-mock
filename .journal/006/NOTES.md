@@ -18,3 +18,8 @@ Plan: Replace unconditional auto-approval with a `go-oidc` pending auth policy t
 Goal for the checkpoint: Finish the combined authorization page implementation and verify the repo checks.
 What changed: Commit `1bcc541` on `feat/combined-authorization-page` replaces unconditional auto-approval with a server-rendered pending authorization policy, posts approvals and denials through `/oauth2/authorize/{sessionID}`, snapshots edited claims into the existing grant store, and expands app-level flow tests for page rendering, mounted profiles, edited claims, denial redirects, validation errors, and first-mounted-profile default selection.
 Verification: `go test ./internal/oidc ./internal/app`, `go test ./...`, `git diff --check`, and `moon run root:check --summary minimal` all passed. The first Moon run failed because golangci-lint had stale cached diagnostics for removed sibling worktree `.wt/feat-mounted-profiles`; clearing the golangci-lint cache fixed the environmental failure.
+
+## 2026-06-26 23:37 — PR opened
+Goal for the checkpoint: Publish the phase 4 branch for review and verify hosted checks.
+What changed: Pushed `feat/combined-authorization-page` and opened draft PR #12 (`feat(oidc): add combined authorization page`).
+Verification: `gh pr checks 12 --watch --fail-fast` completed with `ci`, `GitHub Pages`, and `Kusari Inspector` passing; release/image dry-run jobs and deploy pages were skipped by workflow rules.
