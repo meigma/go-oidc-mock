@@ -48,8 +48,8 @@ type RouterDeps struct {
 	Readiness []ReadinessCheck
 	// Register mounts resource operations onto the Huma API.
 	Register Registrar
-	// RawRoutes mounts exact non-Huma routes that still belong to the application
-	// surface, such as protocol-library endpoints.
+	// RawRoutes mounts non-Huma routes that still belong to the application
+	// surface, such as protocol-library endpoints and callback subtrees.
 	RawRoutes []RawRoute
 	// Tracing wraps the handler with the OpenTelemetry HTTP server-span
 	// instrumentation (otelhttp) and installs the span-naming Huma middleware.

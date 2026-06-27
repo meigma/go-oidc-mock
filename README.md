@@ -4,9 +4,10 @@
 stand-in identity provider so applications can exercise real protocol behavior
 instead of mocking their own authentication integration.
 
-This first pass is a protocol shell: discovery and JWKS are served
-deterministically, while the authorization, token, and userinfo endpoints are
-registered and return `501 Not Implemented` until the full flow is built.
+The current implementation supports a minimal authorization-code flow. It serves
+discovery, JWKS, authorization, token, and userinfo endpoints through the
+embedded OIDC provider, auto-approving valid authorization requests for a fixed
+mock user.
 
 ## Prerequisites
 
@@ -23,16 +24,40 @@ Run the server with Docker Compose:
 docker compose up --build
 ```
 
-Then smoke the protocol shell:
+Then smoke the protocol endpoints:
 
 ```sh
 curl -sS localhost:8080/healthz
 curl -sS localhost:8080/readyz
 curl -sS localhost:8080/.well-known/openid-configuration
 curl -sS localhost:8080/jwks.json
+```
 
-curl -sS -o /dev/null -w '%{http_code}\n' localhost:8080/oauth2/authorize
-# 501
+Run a public-client PKCE flow:
+
+```sh
+VERIFIER=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~
+CHALLENGE="$(printf '%s' "$VERIFIER" | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')"
+
+curl -iG http://localhost:8080/oauth2/authorize \
+  --data-urlencode response_type=code \
+  --data-urlencode client_id=go-oidc-mock-public \
+  --data-urlencode redirect_uri=http://localhost:3000/callback \
+  --data-urlencode scope="openid profile email" \
+  --data-urlencode state=smoke \
+  --data-urlencode code_challenge="$CHALLENGE" \
+  --data-urlencode code_challenge_method=S256
+
+# Copy the code query parameter from the Location header.
+CODE=...
+
+curl -sS http://localhost:8080/oauth2/token \
+  -H 'Content-Type: application/x-www-form-urlencoded' \
+  -d grant_type=authorization_code \
+  -d client_id=go-oidc-mock-public \
+  -d redirect_uri=http://localhost:3000/callback \
+  -d code="$CODE" \
+  -d code_verifier="$VERIFIER"
 ```
 
 Build and run the binary directly:
@@ -96,12 +121,24 @@ Implemented now:
 
 - `GET /.well-known/openid-configuration`
 - `GET /jwks.json`
-
-Registered but intentionally not implemented yet:
-
 - `GET /oauth2/authorize`
+- `POST /oauth2/authorize`
+- `GET /oauth2/authorize/*`
+- `POST /oauth2/authorize/*`
 - `POST /oauth2/token`
 - `GET /userinfo`
+- `POST /userinfo`
+
+Built-in clients:
+
+- `go-oidc-mock-public`: public authorization-code client with S256 PKCE.
+- `go-oidc-mock-confidential`: confidential authorization-code client with
+  secret `go-oidc-mock-secret` and `client_secret_basic`.
+
+Both clients allow `http://localhost:3000/callback` and
+`http://127.0.0.1:3000/callback`. Valid authorization requests are
+auto-approved for subject `go-oidc-mock-user` with `name`, `email`, and
+`email_verified` claims.
 
 Operational endpoints:
 
@@ -124,5 +161,7 @@ moon run root:check
 moon run docs:build
 ```
 
-Run `moon run root:openapi` after changing the HTTP API so the committed
-`docs/docs/openapi.yaml` stays in sync.
+Run `moon run root:openapi` after changing Huma API operations so the committed
+`docs/docs/openapi.yaml` stays in sync. Standard OIDC/OAuth protocol endpoints
+are described by discovery metadata and are intentionally not OpenAPI
+operations.

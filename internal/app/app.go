@@ -16,7 +16,6 @@ import (
 	"github.com/meigma/go-oidc-mock/internal/config"
 	"github.com/meigma/go-oidc-mock/internal/observability"
 	"github.com/meigma/go-oidc-mock/internal/oidc"
-	"github.com/meigma/go-oidc-mock/internal/oidc/httpapi"
 	"github.com/meigma/go-oidc-mock/internal/ratelimit"
 )
 
@@ -81,7 +80,7 @@ func New(
 		CORSAllowedOrigins:   cfg.CORSAllowedOrigins,
 		TrustedProxyHeader:   cfg.TrustedProxyHeader,
 		Readiness:            nil,
-		Register:             registerResources(service),
+		Register:             nil,
 		RawRoutes:            protocolRoutes(service.Handler(), limitRawRoute),
 		Tracing:              cfg.TracingEnabled,
 		InstallRateLimit:     installRateLimit,
@@ -146,23 +145,12 @@ func (a *App) Handler() http.Handler {
 // OpenAPIYAML builds the API without binding a listener and returns the
 // OpenAPI 3.0.3 specification as YAML.
 func OpenAPIYAML(version string) ([]byte, error) {
-	service, err := oidc.NewService(config.DefaultIssuerURL)
-	if err != nil {
-		return nil, fmt.Errorf("init oidc service: %w", err)
-	}
-
-	spec, err := adapterhttp.SpecYAML(version, registerResources(service), nil)
+	spec, err := adapterhttp.SpecYAML(version, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build openapi spec: %w", err)
 	}
 
 	return spec, nil
-}
-
-func registerResources(service *oidc.Service) adapterhttp.Registrar {
-	return func(api huma.API) {
-		httpapi.Register(api, service)
-	}
 }
 
 func protocolRoutes(
@@ -176,5 +164,12 @@ func protocolRoutes(
 	return []adapterhttp.RawRoute{
 		{Method: http.MethodGet, Path: oidc.DiscoveryPath, Handler: providerHandler},
 		{Method: http.MethodGet, Path: oidc.JWKSPath, Handler: providerHandler},
+		{Method: http.MethodGet, Path: oidc.AuthorizationPath, Handler: providerHandler},
+		{Method: http.MethodPost, Path: oidc.AuthorizationPath, Handler: providerHandler},
+		{Method: http.MethodGet, Path: oidc.AuthorizationPath + "/*", Handler: providerHandler},
+		{Method: http.MethodPost, Path: oidc.AuthorizationPath + "/*", Handler: providerHandler},
+		{Method: http.MethodPost, Path: oidc.TokenPath, Handler: providerHandler},
+		{Method: http.MethodGet, Path: oidc.UserInfoPath, Handler: providerHandler},
+		{Method: http.MethodPost, Path: oidc.UserInfoPath, Handler: providerHandler},
 	}
 }
