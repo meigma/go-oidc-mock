@@ -19,3 +19,9 @@ Goal for this checkpoint: Finish and validate the minimal authorization-code imp
 Current state of the world: Branch `feat/phase-2-auth-code` is clean at commit `3b4acfd feat(oidc): add minimal authorization code flow`. The implementation moved authorize/token/userinfo to provider-owned raw routes, added built-in public and confidential clients, enabled auth-code flow with S256 PKCE, added auto-approval claims for `go-oidc-mock-user`, removed the Huma 501 adapter, and updated README/docs/OpenAPI expectations.
 Validation: `go test ./...` passed. `moon run root:check --summary minimal` passed after clearing a stale golangci-lint cache that referenced a removed old worktree. The docs build still emits the existing Material for MkDocs 2.0 warning, but completes successfully.
 Next: Decide whether to push/open a PR for `feat/phase-2-auth-code`, or continue with another implementation slice in the same session.
+
+## 2026-06-26 18:26 — PR opened and CI verified
+Goal for this checkpoint: Publish the phase 2 branch and verify hosted CI.
+Current state of the world: Pushed `feat/phase-2-auth-code` to `origin` and opened ready PR #10, `feat(oidc): add minimal authorization code flow`, against `master`.
+Validation: GitHub reported PR #10 as clean and mergeable. Non-skipped checks passed: `ci`, `GitHub Pages`, and `Kusari Inspector`. Release dry-run/container checks were skipped for this branch.
+Next: Review or merge PR #10 when ready.
