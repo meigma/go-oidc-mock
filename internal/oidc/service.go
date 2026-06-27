@@ -8,8 +8,10 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/luikyv/go-oidc/pkg/goidc"
@@ -29,6 +31,30 @@ const (
 	TokenPath = "/oauth2/token" //nolint:gosec // OAuth endpoint path, not a hardcoded credential.
 	// UserInfoPath is the OpenID Connect UserInfo endpoint path.
 	UserInfoPath = "/userinfo"
+
+	// DefaultPublicClientID is the built-in public client identifier.
+	DefaultPublicClientID = "go-oidc-mock-public"
+	// DefaultConfidentialClientID is the built-in confidential client identifier.
+	DefaultConfidentialClientID = "go-oidc-mock-confidential"
+	// DefaultConfidentialClientSecret is the built-in confidential client secret.
+	DefaultConfidentialClientSecret = "go-oidc-mock-secret" //nolint:gosec // Intentional mock client secret.
+	// DefaultRedirectURI is the built-in localhost redirect URI.
+	DefaultRedirectURI = "http://localhost:3000/callback"
+	// DefaultLoopbackRedirectURI is the built-in loopback redirect URI.
+	DefaultLoopbackRedirectURI = "http://127.0.0.1:3000/callback"
+
+	// DefaultSubject is the fixed subject used by phase-2 auto-approval.
+	DefaultSubject = "go-oidc-mock-user"
+	// DefaultName is the fixed name claim used by phase-2 auto-approval.
+	DefaultName = "Mock User"
+	// DefaultEmail is the fixed email claim used by phase-2 auto-approval.
+	DefaultEmail = "user@example.test"
+)
+
+const (
+	autoApprovePolicyID = "go-oidc-mock-auto-approve"
+	idClaimsStoreKey    = "go_oidc_mock_id_claims"
+	infoClaimsStoreKey  = "go_oidc_mock_info_claims"
 )
 
 // Service owns the embedded OpenID Provider used by the mock server.
@@ -38,8 +64,35 @@ type Service struct {
 	jwks     goidc.JSONWebKeySet
 }
 
+type serviceConfig struct {
+	clients []*goidc.Client
+}
+
+// ServiceOption customizes Service construction for internal tests and future wiring.
+type ServiceOption func(*serviceConfig)
+
+// WithClients replaces the built-in static clients used by the provider.
+func WithClients(clients ...*goidc.Client) ServiceOption {
+	return func(cfg *serviceConfig) {
+		cfg.clients = cloneClients(clients)
+	}
+}
+
 // NewService constructs a Service for issuerURL.
 func NewService(issuerURL string) (*Service, error) {
+	return NewServiceWithOptions(issuerURL)
+}
+
+// NewServiceWithOptions constructs a Service for issuerURL with internal options.
+func NewServiceWithOptions(issuerURL string, opts ...ServiceOption) (*Service, error) {
+	cfg := serviceConfig{clients: defaultClients()}
+	for _, opt := range opts {
+		opt(&cfg)
+	}
+	if len(cfg.clients) == 0 {
+		return nil, errors.New("at least one static client is required")
+	}
+
 	issuer, err := normalizeIssuerURL(issuerURL)
 	if err != nil {
 		return nil, err
@@ -63,8 +116,15 @@ func NewService(issuerURL string) (*Service, error) {
 		provider.WithScopes(goidc.ScopeProfile, goidc.ScopeEmail, goidc.ScopeOfflineAccess),
 		provider.WithClaims(goidc.ClaimSubject, goidc.ClaimName, goidc.ClaimEmail, goidc.ClaimEmailVerified),
 		provider.WithIDTokenSignatureAlgs(goidc.RS256),
+		provider.WithAuthCodeGrant(nil, goidc.ResponseTypeCode),
+		provider.WithPKCE(goidc.CodeChallengeMethodSHA256),
+		provider.WithNoneAuthn(),
 		provider.WithSecretBasicAuthn(),
 		provider.WithSecretPostAuthn(),
+		provider.WithStaticClients(cfg.clients[0], cfg.clients[1:]...),
+		provider.WithPolicies(autoApprovePolicy()),
+		provider.WithIDTokenClaims(idTokenClaimsFromStore(idClaimsStoreKey)),
+		provider.WithUserInfoClaims(userInfoClaimsFromStore(infoClaimsStoreKey)),
 		provider.WithJTIConsumer(func(context.Context, string) error {
 			return nil
 		}),
@@ -93,6 +153,122 @@ func (s *Service) Handler() http.Handler {
 // JWKS returns the public signing keys currently advertised by the provider.
 func (s *Service) JWKS() goidc.JSONWebKeySet {
 	return s.jwks.Public()
+}
+
+func defaultClients() []*goidc.Client {
+	redirectURIs := []string{DefaultRedirectURI, DefaultLoopbackRedirectURI}
+	scopeIDs := strings.Join([]string{
+		goidc.ScopeOpenID.ID,
+		goidc.ScopeProfile.ID,
+		goidc.ScopeEmail.ID,
+	}, " ")
+	grantTypes := []goidc.GrantType{goidc.GrantAuthorizationCode}
+	responseTypes := []goidc.ResponseType{goidc.ResponseTypeCode}
+
+	return []*goidc.Client{
+		{
+			ID: DefaultPublicClientID,
+			ClientMeta: goidc.ClientMeta{
+				Name:             "go-oidc-mock public client",
+				RedirectURIs:     slices.Clone(redirectURIs),
+				GrantTypes:       slices.Clone(grantTypes),
+				ResponseTypes:    slices.Clone(responseTypes),
+				ScopeIDs:         scopeIDs,
+				TokenAuthnMethod: goidc.AuthnMethodNone,
+			},
+		},
+		{
+			ID:     DefaultConfidentialClientID,
+			Secret: DefaultConfidentialClientSecret,
+			ClientMeta: goidc.ClientMeta{
+				Name:             "go-oidc-mock confidential client",
+				RedirectURIs:     slices.Clone(redirectURIs),
+				GrantTypes:       slices.Clone(grantTypes),
+				ResponseTypes:    slices.Clone(responseTypes),
+				ScopeIDs:         scopeIDs,
+				TokenAuthnMethod: goidc.AuthnMethodSecretBasic,
+			},
+		},
+	}
+}
+
+func cloneClients(clients []*goidc.Client) []*goidc.Client {
+	cloned := make([]*goidc.Client, 0, len(clients))
+	for _, client := range clients {
+		if client == nil {
+			continue
+		}
+		copyClient := *client
+		copyClient.RedirectURIs = slices.Clone(client.RedirectURIs)
+		copyClient.RequestURIs = slices.Clone(client.RequestURIs)
+		copyClient.GrantTypes = slices.Clone(client.GrantTypes)
+		copyClient.ResponseTypes = slices.Clone(client.ResponseTypes)
+		copyClient.Contacts = slices.Clone(client.Contacts)
+		copyClient.AuthDetailTypes = slices.Clone(client.AuthDetailTypes)
+		copyClient.PostLogoutRedirectURIs = slices.Clone(client.PostLogoutRedirectURIs)
+		cloned = append(cloned, &copyClient)
+	}
+
+	return cloned
+}
+
+func autoApprovePolicy() goidc.AuthnPolicy {
+	return goidc.NewPolicy(
+		autoApprovePolicyID,
+		func(_ *http.Request, _ *goidc.AuthnSession, _ *goidc.Client) bool {
+			return true
+		},
+		func(_ http.ResponseWriter, _ *http.Request, session *goidc.AuthnSession, _ *goidc.Client) (goidc.Status, error) {
+			session.Subject = DefaultSubject
+			session.Username = DefaultSubject
+			session.GrantedScopes = session.Scopes
+			session.GrantedResources = session.Resources
+			session.GrantedAuthDetails = session.AuthDetails
+			if session.Store == nil {
+				session.Store = map[string]any{}
+			}
+			session.Store[idClaimsStoreKey] = defaultUserClaims()
+			session.Store[infoClaimsStoreKey] = defaultUserClaims()
+
+			return goidc.StatusSuccess, nil
+		},
+	)
+}
+
+func defaultUserClaims() map[string]any {
+	return map[string]any{
+		goidc.ClaimName:          DefaultName,
+		goidc.ClaimEmail:         DefaultEmail,
+		goidc.ClaimEmailVerified: true,
+	}
+}
+
+func idTokenClaimsFromStore(key string) goidc.IDTokenClaimsFunc {
+	return func(_ context.Context, grant *goidc.Grant) map[string]any {
+		return claimsFromStore(grant, key)
+	}
+}
+
+func userInfoClaimsFromStore(key string) goidc.UserInfoClaimsFunc {
+	return func(_ context.Context, grant *goidc.Grant) map[string]any {
+		return claimsFromStore(grant, key)
+	}
+}
+
+func claimsFromStore(grant *goidc.Grant, key string) map[string]any {
+	if grant == nil || grant.Store == nil {
+		return nil
+	}
+
+	claims, ok := grant.Store[key].(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	out := make(map[string]any, len(claims))
+	maps.Copy(out, claims)
+
+	return out
 }
 
 func newSigningJWKS() (goidc.JSONWebKeySet, error) {

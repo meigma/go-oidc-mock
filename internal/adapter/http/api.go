@@ -1,8 +1,7 @@
 // Package http assembles the generic, resource-agnostic HTTP transport: the chi
 // router and middleware, the infrastructure routes (/healthz, /readyz, /metrics),
 // the Huma API, and server-less OpenAPI export. Resource operations are mounted by
-// their own adapter packages (for example, internal/oidc/httpapi) through
-// the Registrar seam.
+// their own adapter packages through the Registrar seam.
 package http
 
 import (
@@ -21,11 +20,11 @@ const apiTitle = "go-oidc-mock"
 // adapter package provides one, and the composition root composes them.
 type Registrar func(huma.API)
 
-// RawRoute mounts a non-Huma HTTP handler on an exact router path.
+// RawRoute mounts a non-Huma HTTP handler on a chi route pattern.
 type RawRoute struct {
 	// Method is the HTTP method accepted by the route.
 	Method string
-	// Path is the exact route path.
+	// Path is the chi route pattern.
 	Path string
 	// Handler serves the route.
 	Handler http.Handler

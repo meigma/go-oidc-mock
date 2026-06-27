@@ -79,14 +79,14 @@ func TestAppWiringRateLimits(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 	}
 
-	getDiscovery := func() int {
-		req := httptest.NewRequest(http.MethodGet, oidc.DiscoveryPath, nil)
+	getAuthorizeCallback := func() int {
+		req := httptest.NewRequest(http.MethodGet, oidc.AuthorizationPath+"/missing-session", nil)
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 
 		return rec.Code
 	}
 
-	assert.Equal(t, http.StatusOK, getDiscovery())
-	assert.Equal(t, http.StatusTooManyRequests, getDiscovery())
+	assert.Equal(t, http.StatusBadRequest, getAuthorizeCallback())
+	assert.Equal(t, http.StatusTooManyRequests, getAuthorizeCallback())
 }
