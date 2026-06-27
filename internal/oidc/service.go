@@ -52,9 +52,8 @@ const (
 )
 
 const (
-	autoApprovePolicyID = "go-oidc-mock-auto-approve"
-	idClaimsStoreKey    = "go_oidc_mock_id_claims"
-	infoClaimsStoreKey  = "go_oidc_mock_info_claims"
+	idClaimsStoreKey   = "go_oidc_mock_id_claims"
+	infoClaimsStoreKey = "go_oidc_mock_info_claims"
 )
 
 // Service owns the embedded OpenID Provider used by the mock server.
@@ -104,7 +103,6 @@ func NewServiceWithOptions(issuerURL string, opts ...ServiceOption) (*Service, e
 	if err != nil {
 		return nil, fmt.Errorf("validate profiles: %w", err)
 	}
-	defaultProfile := SelectDefaultProfile(profiles)
 
 	issuer, err := normalizeIssuerURL(issuerURL)
 	if err != nil {
@@ -135,7 +133,7 @@ func NewServiceWithOptions(issuerURL string, opts ...ServiceOption) (*Service, e
 		provider.WithSecretBasicAuthn(),
 		provider.WithSecretPostAuthn(),
 		provider.WithStaticClients(cfg.clients[0], cfg.clients[1:]...),
-		provider.WithPolicies(autoApprovePolicy(defaultProfile)),
+		provider.WithPolicies(newAuthorizationPolicy(profiles)),
 		provider.WithIDTokenClaims(idTokenClaimsFromStore(idClaimsStoreKey)),
 		provider.WithUserInfoClaims(userInfoClaimsFromStore(infoClaimsStoreKey)),
 		provider.WithJTIConsumer(func(context.Context, string) error {
@@ -232,30 +230,6 @@ func cloneProfiles(profiles []Profile) []Profile {
 	}
 
 	return cloned
-}
-
-func autoApprovePolicy(profile Profile) goidc.AuthnPolicy {
-	return goidc.NewPolicy(
-		autoApprovePolicyID,
-		func(_ *http.Request, _ *goidc.AuthnSession, _ *goidc.Client) bool {
-			return true
-		},
-		func(_ http.ResponseWriter, _ *http.Request, session *goidc.AuthnSession, _ *goidc.Client) (goidc.Status, error) {
-			claims := profile.UserClaims()
-			session.Subject = profile.Subject
-			session.Username = profile.Subject
-			session.GrantedScopes = session.Scopes
-			session.GrantedResources = session.Resources
-			session.GrantedAuthDetails = session.AuthDetails
-			if session.Store == nil {
-				session.Store = map[string]any{}
-			}
-			session.Store[idClaimsStoreKey] = claims
-			session.Store[infoClaimsStoreKey] = claims
-
-			return goidc.StatusSuccess, nil
-		},
-	)
 }
 
 func idTokenClaimsFromStore(key string) goidc.IDTokenClaimsFunc {
