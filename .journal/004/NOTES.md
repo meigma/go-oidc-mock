@@ -25,3 +25,9 @@ Goal for this checkpoint: Publish the phase 2 branch and verify hosted CI.
 Current state of the world: Pushed `feat/phase-2-auth-code` to `origin` and opened ready PR #10, `feat(oidc): add minimal authorization code flow`, against `master`.
 Validation: GitHub reported PR #10 as clean and mergeable. Non-skipped checks passed: `ci`, `GitHub Pages`, and `Kusari Inspector`. Release dry-run/container checks were skipped for this branch.
 Next: Review or merge PR #10 when ready.
+
+## 2026-06-26 18:36 — Close
+Goal for this checkpoint: Close session 004 after review approval.
+Current state of the world: PR #10, `feat(oidc): add minimal authorization code flow`, was squash-merged into `master` as `cf8c5a5`. Local `master` was fast-forwarded to the merge commit, the `feat/phase-2-auth-code` Worktrunk worktree and local branch were removed, and the remote feature branch was deleted.
+Validation: Hosted PR checks passed before merge: `ci`, `GitHub Pages`, and `Kusari Inspector`; release dry-run/container checks were skipped for the branch. Local validation before PR was `go test ./...` and `moon run root:check --summary minimal`.
+Next: Future work can start from `master` at `cf8c5a5`; deferred phase work remains profile files, editable authorization UI, refresh-token behavior, dynamic/configurable clients, admin APIs, and persistent signing key configuration.
