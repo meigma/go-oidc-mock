@@ -6,8 +6,8 @@ instead of mocking their own authentication integration.
 
 The current implementation supports a minimal authorization-code flow. It serves
 discovery, JWKS, authorization, token, and userinfo endpoints through the
-embedded OIDC provider, auto-approving valid authorization requests for a fixed
-mock user.
+embedded OIDC provider, auto-approving valid authorization requests for a mounted
+profile or a built-in fallback mock user.
 
 ## Prerequisites
 
@@ -23,6 +23,9 @@ Run the server with Docker Compose:
 ```sh
 docker compose up --build
 ```
+
+The included Compose stack mounts `examples/profiles/default.json` into the
+container at `/etc/go-oidc-mock/profiles`.
 
 Then smoke the protocol endpoints:
 
@@ -97,6 +100,7 @@ variable. Precedence is flag > env > default.
 | `--addr` | `GO_OIDC_MOCK_ADDR` | `:8080` | host:port the API listens on |
 | `--metrics-addr` | `GO_OIDC_MOCK_METRICS_ADDR` | `:9090` | dedicated `/metrics` listener; empty serves `/metrics` on `--addr` |
 | `--issuer-url` | `GO_OIDC_MOCK_ISSUER_URL` | `http://localhost:8080` | external issuer URL advertised by discovery metadata |
+| `--profile-dir` | `GO_OIDC_MOCK_PROFILE_DIR` | `/etc/go-oidc-mock/profiles` | directory containing mounted JSON profile templates |
 | `--log-level` | `GO_OIDC_MOCK_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error` |
 | `--log-format` | `GO_OIDC_MOCK_LOG_FORMAT` | `json` | `json` or `text` |
 | `--read-timeout` | `GO_OIDC_MOCK_READ_TIMEOUT` | `5s` | reading an entire request |
@@ -114,6 +118,32 @@ variable. Precedence is flag > env > default.
 
 `--issuer-url` must be an absolute `http` or `https` URL with no query or
 fragment. A trailing slash is normalized away before endpoint URLs are derived.
+
+## Profiles
+
+At startup, the server reads non-recursive `*.json` profile files from
+`--profile-dir`. Missing or empty directories are allowed and fall back to the
+built-in mock user.
+
+The default profile is the file whose `id` is `default`, or the first profile by
+filename when no profile uses that ID. Valid authorization requests are
+auto-approved for that profile.
+
+```json
+{
+  "id": "default",
+  "label": "Default user",
+  "subject": "user-123",
+  "claims": {
+    "name": "Default User",
+    "email": "user@example.test",
+    "email_verified": true
+  },
+  "custom_claims": {
+    "roles": ["tester"]
+  }
+}
+```
 
 ## Protocol Surface
 
@@ -137,7 +167,8 @@ Built-in clients:
 
 Both clients allow `http://localhost:3000/callback` and
 `http://127.0.0.1:3000/callback`. Valid authorization requests are
-auto-approved for subject `go-oidc-mock-user` with `name`, `email`, and
+auto-approved for the selected startup profile; without mounted profiles, the
+fallback subject is `go-oidc-mock-user` with `name`, `email`, and
 `email_verified` claims.
 
 Operational endpoints:

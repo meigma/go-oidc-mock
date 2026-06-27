@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -71,6 +73,50 @@ func TestPublicPKCEAuthorizationCodeFlow(t *testing.T) {
 	assert.Equal(t, oidc.DefaultName, userInfo["name"])
 	assert.Equal(t, oidc.DefaultEmail, userInfo["email"])
 	assert.Equal(t, true, userInfo["email_verified"])
+}
+
+func TestMountedProfileAuthorizationCodeFlow(t *testing.T) {
+	t.Parallel()
+
+	profileDir := t.TempDir()
+	writeProfile(t, profileDir, "default.json", `{
+		"id": "default",
+		"label": "Mounted User",
+		"subject": "mounted-user",
+		"claims": {
+			"name": "Mounted User",
+			"email": "mounted@example.test",
+			"email_verified": true
+		},
+		"custom_claims": {
+			"roles": ["tester", "admin"]
+		}
+	}`)
+	handler := newFlowHandlerWithProfileDir(t, profileDir)
+	authReq := authorizeRequest{
+		clientID:      oidc.DefaultPublicClientID,
+		state:         "state-mounted-profile",
+		codeVerifier:  testPKCEVerifier,
+		redirectURI:   oidc.DefaultRedirectURI,
+		requestScopes: "openid profile email",
+	}
+
+	code := authorizeCode(t, handler, authReq)
+	token := exchangePublicCode(t, handler, code, authReq)
+
+	userInfo := userInfo(t, handler, token.AccessToken)
+	assert.Equal(t, "mounted-user", userInfo["sub"])
+	assert.Equal(t, "Mounted User", userInfo["name"])
+	assert.Equal(t, "mounted@example.test", userInfo["email"])
+	assert.Equal(t, true, userInfo["email_verified"])
+	assert.Equal(t, []any{"tester", "admin"}, userInfo["roles"])
+
+	idTokenClaims := jwtClaims(t, token.IDToken)
+	assert.Equal(t, "mounted-user", idTokenClaims["sub"])
+	assert.Equal(t, "Mounted User", idTokenClaims["name"])
+	assert.Equal(t, "mounted@example.test", idTokenClaims["email"])
+	assert.Equal(t, true, idTokenClaims["email_verified"])
+	assert.Equal(t, []any{"tester", "admin"}, idTokenClaims["roles"])
 }
 
 func TestPublicClientRequiresPKCE(t *testing.T) {
@@ -154,8 +200,15 @@ func TestAuthorizationCallbackRouteIsProviderOwned(t *testing.T) {
 func newFlowHandler(t *testing.T) http.Handler {
 	t.Helper()
 
+	return newFlowHandlerWithProfileDir(t, t.TempDir())
+}
+
+func newFlowHandlerWithProfileDir(t *testing.T, profileDir string) http.Handler {
+	t.Helper()
+
 	vp := viper.New()
 	vp.Set("issuer-url", testIssuer)
+	vp.Set("profile-dir", profileDir)
 	vp.Set("rate-limit-enabled", false)
 	cfg := config.Load(vp)
 	logger := observability.NewLogger(io.Discard, slog.LevelError, "json")
@@ -295,4 +348,25 @@ func codeChallenge(verifier string) string {
 	sum := sha256.Sum256([]byte(verifier))
 
 	return base64.RawURLEncoding.EncodeToString(sum[:])
+}
+
+func jwtClaims(t *testing.T, token string) map[string]any {
+	t.Helper()
+
+	parts := strings.Split(token, ".")
+	require.Len(t, parts, 3)
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	require.NoError(t, err)
+
+	var claims map[string]any
+	require.NoError(t, json.Unmarshal(payload, &claims))
+
+	return claims
+}
+
+func writeProfile(t *testing.T, dir, name, content string) {
+	t.Helper()
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o600))
 }
