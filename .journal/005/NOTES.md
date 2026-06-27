@@ -19,3 +19,8 @@ What was done: Implemented mounted profile templates on `feat/mounted-profiles` 
 What changed: Added the OIDC profile model and validation, filesystem profile loader, `--profile-dir` / `GO_OIDC_MOCK_PROFILE_DIR`, app startup wiring, profile-backed auto-approval claims, functional mounted-profile coverage, sample Compose profile mount, and README/docs updates.
 Validation: `moon run root:test --summary minimal`, `moon run root:check --summary minimal`, and `moon run docs:build --summary minimal` all passed. `root:check` initially surfaced a stale golangci-lint cache entry for a deleted prior worktree; clearing the golangci-lint cache resolved it.
 Next: User can inspect the local feature branch or request push/PR/closeout.
+
+## 2026-06-26 21:52 — Close
+Merged PR: https://github.com/meigma/go-oidc-mock/pull/11
+Outcome: PR #11 was squash-merged into `master` as `873b672`; local `master` was fast-forwarded to that commit; the `feat/mounted-profiles` Worktrunk worktree, local branch, and remote branch were removed.
+Handoff state: Mounted profile templates are now used by auto-approval. The next likely implementation slice is the authorization page/profile selection and JIT claim editing flow, with refresh-token snapshot behavior still deferred.
