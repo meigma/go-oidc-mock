@@ -11,3 +11,4 @@
 - Session 003 landed the phase 1 provider spike in PR #9. Discovery and JWKS are provider-owned exact raw routes, not Huma/OpenAPI-owned endpoints.
 - Session 004 landed the minimal authorization-code flow in PR #10. Protocol endpoints are provider-owned raw routes, not OpenAPI operations.
 - Session 005 landed mounted profile templates in PR #11. Auto-approval snapshots the selected startup profile into grant-local ID token and userinfo claims; no authorization page or profile-selection UI exists yet.
+- Session 006 landed the combined authorization page in PR #12. `/oauth2/authorize` now renders a server-side page, approval/denial resumes through `/oauth2/authorize/{sessionID}`, edited profile claims are snapshotted into the existing grant store for ID token and userinfo callbacks, and refresh-token snapshot behavior is still deferred.

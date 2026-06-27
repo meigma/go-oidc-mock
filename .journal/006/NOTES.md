@@ -23,3 +23,8 @@ Verification: `go test ./internal/oidc ./internal/app`, `go test ./...`, `git di
 Goal for the checkpoint: Publish the phase 4 branch for review and verify hosted checks.
 What changed: Pushed `feat/combined-authorization-page` and opened draft PR #12 (`feat(oidc): add combined authorization page`).
 Verification: `gh pr checks 12 --watch --fail-fast` completed with `ci`, `GitHub Pages`, and `Kusari Inspector` passing; release/image dry-run jobs and deploy pages were skipped by workflow rules.
+
+## 2026-06-27 09:05 — Close
+Goal for the checkpoint: Merge the approved phase 4 PR and close session 006.
+What happened: Marked PR #12 ready, squash-merged it into `master` as `48b2bf3`, fast-forwarded the main checkout, deleted the leftover remote feature branch, and removed the `feat/combined-authorization-page` Worktrunk worktree. The first `gh pr merge --delete-branch` invocation completed the GitHub merge but failed local cleanup because `master` was already checked out in the main worktree; verifying the PR state showed it was merged, so cleanup continued manually.
+Handoff state: Local `master` is clean and current with `origin/master`; the only remaining non-main worktree is `journal/jmgilman`; `.journal/006/SUMMARY.md`, `.journal/INDEX.md`, and `.journal/TECH_NOTES.md` record the completed session.
